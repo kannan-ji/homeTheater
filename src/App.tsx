@@ -311,7 +311,13 @@ export default function App() {
       
       addSystemMessage('Seeding file via WebTorrent...');
       const wt = getTorrentClient();
-      wt.seed(file, (torrent) => {
+      wt.seed(file, {
+        announceList: [
+          ["wss://tracker.openwebtorrent.com"],
+          ["wss://tracker.btorrent.xyz"],
+          ["wss://tracker.fastcast.nz"]
+        ]
+      }, (torrent: any) => {
         console.log('Client is seeding:', torrent.magnetURI);
         setMagnetURI(torrent.magnetURI);
         // If we already have peers, broadcast immediately
@@ -368,13 +374,9 @@ export default function App() {
   };
 
   const onStreamCreated = React.useCallback((stream: MediaStream) => {
-    console.log('Main App: Stream created/updated', stream.id, stream.getTracks().length);
+    console.log('Main App: Local Stream ready (no longer broadcasted over generic WebRTC to save bandwidth for WebTorrent)');
     activeStreamRef.current = stream;
     setStreamStatus('live');
-    if (p2pRef.current && isHostRef.current) {
-      console.log('Setting local stream for swarm broadcast');
-      p2pRef.current.setLocalStream(stream);
-    }
   }, []);
 
   const refreshStream = () => {
@@ -427,7 +429,7 @@ export default function App() {
     <div className="min-h-screen bg-[#09090b] text-zinc-100 selection:bg-red-500/30 selection:text-red-200">
       {/* Autoplay Overlay for Guests */}
       <AnimatePresence>
-        {!isHost && isConnected && streamStatus === 'paused' && remoteStream && (
+        {!isHost && isConnected && streamStatus === 'paused' && (remoteStream || magnetURI) && (
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -663,7 +665,7 @@ export default function App() {
                 </div>
               </div>
 
-              {!isHost && isConnected && !remoteStream && (
+              {!isHost && isConnected && !remoteStream && !magnetURI && (
                 <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4">
                   <div className="flex items-center gap-2 text-red-500 text-sm">
                     <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
@@ -676,6 +678,14 @@ export default function App() {
                     <RefreshCcw size={14} />
                     Request Resync
                   </button>
+                </div>
+              )}
+              {!isHost && isConnected && magnetURI && streamStatus !== 'live' && (
+                <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div className="flex items-center gap-2 text-yellow-500 text-sm">
+                    <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse" />
+                    <span>Downloading torrent and connecting to peers. This may take a minute...</span>
+                  </div>
                 </div>
               )}
             </div>

@@ -28,7 +28,7 @@ export default function CinemaPlayer({
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [volume, setVolume] = useState(1);
-  const [isMuted, setIsMuted] = useState(!isHost);
+  const [isMuted, setIsMuted] = useState(false);
   const [showControls, setShowControls] = useState(true);
   const [isBlocked, setIsBlocked] = useState(false);
 
@@ -103,14 +103,12 @@ export default function CinemaPlayer({
       console.log('Got magnet URI, adding to WebTorrent...', magnetURI);
       
       // Explicitly set these via JS for maximum peer compatibility
-      video.muted = true;
-      video.defaultMuted = true;
       video.playsInline = true;
       video.autoplay = true;
 
-      const torrent = wt.add(magnetURI, (torrent) => {
+      const torrent = wt.add(magnetURI, (torrent: any) => {
         console.log('WebTorrent ready, rendering to video element.');
-        const file = torrent.files.find(f => f.name.endsWith('.mp4') || f.name.endsWith('.webm') || f.name.endsWith('.mkv')) || torrent.files[0];
+        const file = torrent.files.find((f: any) => f.name.endsWith('.mp4') || f.name.endsWith('.webm') || f.name.endsWith('.mkv')) || torrent.files[0];
         
         if (file) {
           file.renderTo(video, { autoplay: true });
@@ -122,7 +120,16 @@ export default function CinemaPlayer({
         }
       });
 
-      torrent.on('error', (err) => {
+      torrent.on('download', (bytes: number) => {
+        console.log(`Downloading: ${(torrent.downloaded / 1024 / 1024).toFixed(2)} MB / ${(torrent.downloadSpeed / 1024 / 1024).toFixed(2)} MB/s`);
+        // We could dispatch an event or expose this to state, but for now console logging helps debug
+      });
+      
+      torrent.on('warning', (err: any) => {
+        console.warn('WebTorrent Warning:', err);
+      });
+
+      torrent.on('error', (err: any) => {
         console.error('WebTorrent Error downloading:', err);
       });
 
@@ -272,8 +279,8 @@ export default function CinemaPlayer({
             className="absolute inset-0 z-40 bg-black/80 flex flex-col items-center justify-center cursor-pointer"
             onClick={() => {
                if (videoRef.current) {
-                 videoRef.current.muted = true;
-                 setIsMuted(true);
+                 videoRef.current.muted = false;
+                 setIsMuted(false);
                  videoRef.current.play().catch(e => console.warn('Still blocked:', e));
                  setIsBlocked(false);
                } 
@@ -359,7 +366,7 @@ export default function CinemaPlayer({
         )}
       </AnimatePresence>
 
-      {!src && !stream && (
+      {!src && !stream && !magnetURI && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900 text-white/50 text-center px-4">
           <Play size={48} className="mb-4 opacity-20" />
           <p className="text-lg font-medium text-white/80">No Video Source</p>
