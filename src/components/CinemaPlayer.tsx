@@ -33,16 +33,23 @@ export default function CinemaPlayer({
       // When the host starts playing a local file, capture the stream
       if (isHost && onStreamCreated) {
         const video = videoRef.current;
-        video.onplay = () => {
-          // @ts-ignore - captureStream is not in standard types but exists in browsers
+        const handlePlay = () => {
+          let capture: MediaStream | null = null;
+          // @ts-ignore
           if (video.captureStream) {
             // @ts-ignore
-            onStreamCreated(video.captureStream());
+            capture = video.captureStream();
           } else if (video.mozCaptureStream) {
             // @ts-ignore
-            onStreamCreated(video.mozCaptureStream());
+            capture = video.mozCaptureStream();
+          }
+          
+          if (capture) {
+            onStreamCreated(capture);
           }
         };
+        video.addEventListener('play', handlePlay);
+        return () => video.removeEventListener('play', handlePlay);
       }
     }
   }, [src, isHost, onStreamCreated]);

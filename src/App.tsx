@@ -26,6 +26,12 @@ export default function App() {
   const [activePeers, setActivePeers] = useState<string[]>([]);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const activeStreamRef = useRef<MediaStream | null>(null);
+  const isHostRef = useRef(isHost);
+
+  useEffect(() => {
+    isHostRef.current = isHost;
+  }, [isHost]);
 
   useEffect(() => {
     const manager = new P2PManager();
@@ -41,12 +47,18 @@ export default function App() {
 
     manager.onMessage((msg: P2PMessage) => {
       if (msg.type === 'chat') {
-        setChatMessages(prev => [...prev, {
+        const message = {
           id: Math.random().toString(36).substr(2, 9),
           sender: msg.sender.slice(0, 5),
           text: msg.payload,
           timestamp: Date.now()
-        }]);
+        };
+        setChatMessages(prev => [...prev, message]);
+        
+        // Host relay: Send to everyone else
+        if (isHostRef.current) {
+          manager.broadcast('chat', msg.payload);
+        }
       } else if (msg.type === 'sync') {
         setSyncState(msg.payload);
       }
@@ -54,7 +66,26 @@ export default function App() {
 
     manager.onPeerJoined((id) => {
       setIsConnected(true);
-      setActivePeers(prev => [...prev, id]);
+      setActivePeers(prev => {
+        if (prev.includes(id)) return prev;
+        return [...prev, id];
+      });
+
+      // If I am the host and I have a stream, call this new peer immediately
+      if (isHostRef.current) {
+        if (activeStreamRef.current) {
+          console.log('Calling new peer with active stream:', id);
+          manager.call(id, activeStreamRef.current);
+        }
+        // Also send current sync state immediately
+        const video = document.querySelector('video');
+        if (video) {
+          manager.broadcast('sync', {
+            currentTime: video.currentTime,
+            paused: video.paused
+          });
+        }
+      }
     });
 
     manager.onPeerLeft((id) => {
@@ -111,6 +142,7 @@ export default function App() {
   };
 
   const onStreamCreated = (stream: MediaStream) => {
+    activeStreamRef.current = stream;
     if (p2p && isHost) {
       activePeers.forEach(peerId => {
         p2p.call(peerId, stream);
