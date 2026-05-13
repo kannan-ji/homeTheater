@@ -162,11 +162,6 @@ export default function App() {
         if (isMobileRef.current && !isChatVisibleRef.current) {
           setUnreadCount(prev => prev + 1);
         }
-
-        // Host relay: Send to everyone else
-        if (isHostRef.current) {
-          manager.broadcast('chat', payloadData, msg.sender, msg.senderName);
-        }
       } else if (msg.type === 'handshake') {
         if (msg.payload.displayName) {
           const urlParams = new URL(window.location.href).searchParams;
@@ -186,7 +181,13 @@ export default function App() {
           setPeerCountOverride(msg.payload.count);
         }
       } else if (msg.type === 'signal') {
-        if (msg.payload === 'ready-to-stream' && isHostRef.current) {
+        const payload = msg.payload;
+        if (payload?.action === 'redirect') {
+          console.log('Redirecting to peer:', payload.targetPeerId);
+          addSystemMessage('Room node reached capacity. Connecting to another peer in the swarm...');
+          // Connect to the recommended target peer
+          manager.connect(payload.targetPeerId);
+        } else if (payload === 'ready-to-stream' && isHostRef.current) {
           console.log('Peer signaled ready for stream:', msg.sender);
           if (activeStreamRef.current) {
             // Give it a tiny bit more time to stabilize
@@ -341,10 +342,8 @@ export default function App() {
     activeStreamRef.current = stream;
     setStreamStatus('live');
     if (p2p && isHost) {
-      activePeers.forEach(peerId => {
-        console.log('Calling peer with stream:', peerId);
-        p2p.call(peerId, stream);
-      });
+      console.log('Setting local stream for swarm broadcast');
+      p2p.setLocalStream(stream);
     }
   };
 

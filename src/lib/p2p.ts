@@ -3,6 +3,7 @@ import { Peer, DataConnection, MediaConnection } from 'peerjs';
 export type MessageType = 'chat' | 'sync' | 'info' | 'signal' | 'handshake';
 
 export interface P2PMessage {
+  id?: string;
   type: MessageType;
   payload: any;
   sender: string;
@@ -24,6 +25,9 @@ export class P2PManager {
   private connections: Map<string, DataConnection> = new Map();
   private streamConnections: Map<string, MediaConnection> = new Map();
   private peerNames: Map<string, string> = new Map();
+  private activeStream: MediaStream | null = null;
+  private maxOutgoingStreams: number = 2; // Streaming Tree fan-out factor
+  private seenMessages: Set<string> = new Set();
   private onMessageCallbacks: ((msg: P2PMessage) => void)[] = [];
   private onPeerJoinedCallbacks: ((peerId: string) => void)[] = [];
   private onPeerLeftCallbacks: ((peerId: string) => void)[] = [];
@@ -110,7 +114,11 @@ export class P2PManager {
         call.answer();
         call.on('stream', (remoteStream) => {
           console.log('Remote stream received from:', call.peer, 'Tracks:', remoteStream.getTracks().length);
+          this.activeStream = remoteStream;
           this.onStreamReceivedCallbacks.forEach(cb => cb(remoteStream));
+
+          // FORWARDING: Re-stream to my connected peers automatically
+          this.forwardStream(remoteStream);
         });
         
         call.on('error', (err) => {
@@ -135,23 +143,64 @@ export class P2PManager {
     if (!conn) return;
 
     conn.on('open', () => {
+      // REDIRECTION LOGIC: If I am at capacity, redirect this peer to one of my children
+      if (this.connections.size >= this.maxOutgoingStreams) {
+        console.log('At capacity. Redirecting peer:', conn.peer);
+        const children = Array.from(this.connections.keys());
+        const target = children[Math.floor(Math.random() * children.length)];
+        
+        conn.send({
+          type: 'signal',
+          payload: { action: 'redirect', targetPeerId: target },
+          sender: this.peer?.id || 'unknown'
+        });
+
+        // Close connection after a short delay to allow message to arrive
+        setTimeout(() => conn.close(), 1000);
+        return;
+      }
+
       this.connections.set(conn.peer, conn);
-      // Send handshake immediately
+      
+      // Send handshake
       conn.send({ 
         type: 'handshake', 
         payload: { displayName: this.displayName }, 
         sender: this.peer?.id || 'unknown'
       });
+
+      // If I already have a stream, call the new peer immediately
+      if (this.activeStream) {
+        console.log('New peer connected, starting stream call to:', conn.peer);
+        this.call(conn.peer, this.activeStream);
+      }
+
       this.onPeerJoinedCallbacks.forEach(cb => cb(conn.peer));
     });
 
     conn.on('data', (data: any) => {
       const msg = data as P2PMessage;
+      
+      // RELAY LOOP PREVENTION
+      if (msg.id && this.seenMessages.has(msg.id)) return;
+      if (msg.id) {
+        this.seenMessages.add(msg.id);
+        // Keep set size manageable
+        if (this.seenMessages.size > 200) {
+          const first = this.seenMessages.values().next().value;
+          if (first) this.seenMessages.delete(first);
+        }
+      }
+
       if (msg.type === 'handshake') {
         if (msg.payload.displayName) {
           this.peerNames.set(msg.sender, msg.payload.displayName);
         }
       }
+
+      // RELAY to others (excluding the one who sent it)
+      this.relay(msg, conn.peer);
+      
       this.onMessageCallbacks.forEach(cb => cb(msg));
     });
 
@@ -164,6 +213,18 @@ export class P2PManager {
       this.connections.delete(conn.peer);
       this.onPeerLeftCallbacks.forEach(cb => cb(conn.peer));
     });
+  }
+
+  private forwardStream(stream: MediaStream) {
+    console.log('Forwarding stream to', this.connections.size, 'peers');
+    this.connections.forEach((conn, peerId) => {
+      this.call(peerId, stream);
+    });
+  }
+
+  public setLocalStream(stream: MediaStream) {
+    this.activeStream = stream;
+    this.forwardStream(stream);
   }
 
   public connect(remoteId: string) {
@@ -228,7 +289,11 @@ export class P2PManager {
   }
 
   public broadcast(type: MessageType, payload: any, senderId?: string, senderName?: string) {
+    const id = Math.random().toString(36).substr(2, 9);
+    this.seenMessages.add(id);
+
     const msg: P2PMessage = { 
+      id,
       type, 
       payload, 
       sender: senderId || this.peer?.id || 'unknown',
@@ -237,6 +302,17 @@ export class P2PManager {
     this.connections.forEach(conn => {
       conn.send(msg);
     });
+  }
+
+  private relay(msg: P2PMessage, excludePeerId: string) {
+    // Only relay certain messages in the tree
+    if (msg.type === 'chat' || msg.type === 'sync' || msg.type === 'info') {
+      this.connections.forEach((conn, peerId) => {
+        if (peerId !== excludePeerId) {
+          conn.send(msg);
+        }
+      });
+    }
   }
 
   public getPeerName(id: string): string {
