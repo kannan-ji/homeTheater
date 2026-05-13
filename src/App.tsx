@@ -73,6 +73,12 @@ export default function App() {
         }
       } else if (msg.type === 'sync') {
         setSyncState(msg.payload);
+      } else if (msg.type === 'info') {
+        if (msg.payload.type === 'peer-count' && !isHostRef.current) {
+          // Only peers update their display count from host broadcast
+          const count = Math.max(0, msg.payload.count - 1);
+          setActivePeers(new Array(count).fill('peer'));
+        }
       }
     });
 
@@ -80,7 +86,15 @@ export default function App() {
       setIsConnected(true);
       setActivePeers(prev => {
         if (prev.includes(id)) return prev;
-        return [...prev, id];
+        const next = [...prev, id];
+        
+        // Host: Sync peer count to everyone
+        if (isHostRef.current) {
+          setTimeout(() => {
+            manager.broadcast('info', { type: 'peer-count', count: next.length + 1 });
+          }, 1000);
+        }
+        return next;
       });
       addSystemMessage(`User ${id.slice(0, 5)} joined the party!`);
 
@@ -104,7 +118,13 @@ export default function App() {
     });
 
     manager.onPeerLeft((id) => {
-      setActivePeers(prev => prev.filter(p => p !== id));
+      setActivePeers(prev => {
+        const next = prev.filter(p => p !== id);
+        if (isHostRef.current) {
+          manager.broadcast('info', { type: 'peer-count', count: next.length + 1 });
+        }
+        return next;
+      });
       addSystemMessage(`User ${id.slice(0, 5)} left the party.`);
       if (activePeers.length <= 1) setIsConnected(false);
     });
@@ -284,9 +304,13 @@ export default function App() {
                   <h3 className="text-lg font-bold mb-1">
                     {isHost ? 'Hosting Local File' : 'Watching Live Stream'}
                   </h3>
-                  <p className="text-zinc-500 text-sm">
-                    {isHost ? 'Your friends are watching your shared stream.' : 'Connected to host. Playback is synchronized.'}
-                  </p>
+                  <div className="text-zinc-500 text-sm flex items-center gap-2">
+                    <span>{isHost ? 'Your friends are watching your shared stream.' : 'Connected to host. Playback is synchronized.'}</span>
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-white/5 rounded-full text-xs font-medium text-zinc-400">
+                      <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+                      {activePeers.length + 1} {activePeers.length + 1 === 1 ? 'person' : 'people'} online
+                    </span>
+                  </div>
                 </div>
                 
                 <div className="flex gap-2">

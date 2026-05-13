@@ -56,6 +56,10 @@ export class P2PManager {
       this.onMessageCallbacks.forEach(cb => cb(data as P2PMessage));
     });
 
+    conn.on('error', (err) => {
+      console.error('Connection error:', err);
+    });
+
     conn.on('close', () => {
       this.connections.delete(conn.peer);
       this.onPeerLeftCallbacks.forEach(cb => cb(conn.peer));
