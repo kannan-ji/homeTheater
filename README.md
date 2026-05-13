@@ -42,8 +42,17 @@ This repository includes a GitHub Action to deploy the app automatically.
 1. `npm run build`
 2. `npm start`
 
-## Technologies
-- **PeerJS**: For P2P data and media connections.
-- **React**: Frontend framework.
-- **Tailwind CSS**: Styling.
-- **Express**: Server environment.
+## Technologies & Architecture
+
+### Core Stack
+- **React 19**: Utilizing the latest concurrent features for a smooth UI.
+- **Tailwind CSS 4**: Modern utility-first styling with high performance.
+- **Vite 6**: Extremely fast development and build pipeline.
+- **Motion**: Fluid animations for route transitions and interactive UI elements.
+- **TypeScript**: Full type safety across the networking and UI layers.
+
+### Networking (The "Swarm")
+The heart of **homeTheater** is a custom P2P swarm architecture built on **PeerJS**:
+- **MediaStream Tree**: To avoid overloading the host's upload bandwidth, the app uses a "streaming tree" approach. Peers who receive a stream can automatically forward it to others, creating a decentralized distribution network.
+- **Synchronized State**: Playback commands (play, pause, seek) are broadcasted across the swarm using reliable data channels.
+- **Presence Tracking**: Automatic management of peer entries and exits within the room.
