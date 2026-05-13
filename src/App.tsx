@@ -124,8 +124,12 @@ export default function App() {
         }
       } else if (msg.type === 'handshake') {
         if (msg.payload.displayName) {
-          // Notify that the user joined with their chosen name
-          addSystemMessage(`User ${msg.payload.displayName} joined the party!`);
+          const roomToJoin = new URLSearchParams(window.location.search).get('room');
+          if (!isHostRef.current && msg.sender === roomToJoin) {
+            addSystemMessage(`You have joined ${msg.payload.displayName}'s room!`);
+          } else {
+            addSystemMessage(`User ${msg.payload.displayName} joined the party!`);
+          }
         }
       } else if (msg.type === 'sync') {
         setSyncState(msg.payload);
