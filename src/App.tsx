@@ -63,16 +63,28 @@ export default function App() {
   };
 
   const initP2P = (roomToJoin?: string) => {
-    if (p2pRef.current) return p2pRef.current;
+    if (p2pRef.current && !p2pRef.current.isDestroyed()) return p2pRef.current;
+    if (isConnecting) return null;
 
     setIsConnecting(true);
     setConnectionError(null);
 
-    const manager = new P2PManager();
+    let manager: P2PManager;
+    try {
+      manager = new P2PManager();
+    } catch (e) {
+      console.error('Failed to create P2PManager:', e);
+      setIsConnecting(false);
+      setConnectionError('Local initialization failed.');
+      return null;
+    }
+
     p2pRef.current = manager;
     setP2p(manager);
 
+    let pollingAttempts = 0;
     const checkId = setInterval(() => {
+      pollingAttempts++;
       const id = manager.getMyId();
       if (id) {
         setPeerId(id);
@@ -83,8 +95,16 @@ export default function App() {
         }
         clearInterval(checkId);
         setIsConnecting(false);
+      } else if (pollingAttempts > 20) { // 10 seconds timeout
+        clearInterval(checkId);
+        setIsConnecting(false);
+        setConnectionError('Connection timed out.');
       }
     }, 500);
+
+    const errorCleanup = manager.onError(() => {
+      clearInterval(checkId);
+    });
 
     manager.onError((err) => {
       console.error('App caught peer error:', err);

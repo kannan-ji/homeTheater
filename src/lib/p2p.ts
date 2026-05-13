@@ -38,70 +38,94 @@ export class P2PManager {
   }
 
   private init() {
-    this.peer = new Peer(this.peerId, {
-      config: {
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-          { urls: 'stun:stun2.l.google.com:19302' },
-          { urls: 'stun:stun3.l.google.com:19302' },
-          { urls: 'stun:stun4.l.google.com:19302' },
-          { urls: 'stun:stun.ekiga.net' },
-          { urls: 'stun:stun.ideasip.com' },
-          { urls: 'stun:stun.schlund.de' },
-          { urls: 'stun:stun.voipstunt.com' },
-          { urls: 'stun:stun.voxgratia.org' },
-          { urls: 'stun:stun.xten.com' },
-        ],
-      },
-    });
+    try {
+      this.peer = new Peer(this.peerId, {
+        config: {
+          iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' },
+            { urls: 'stun:stun2.l.google.com:19302' },
+            { urls: 'stun:stun3.l.google.com:19302' },
+            { urls: 'stun:stun4.l.google.com:19302' },
+            { urls: 'stun:stun.ekiga.net' },
+            { urls: 'stun:stun.ideasip.com' },
+            { urls: 'stun:stun.schlund.de' },
+            { urls: 'stun:stun.voipstunt.com' },
+            { urls: 'stun:stun.voxgratia.org' },
+            { urls: 'stun:stun.xten.com' },
+          ],
+        },
+      });
 
-    this.peer.on('open', (id) => {
-      console.log('My peer ID is: ' + id);
-      this.onStatusChangeCallbacks.forEach(cb => cb('ready'));
-    });
-
-    this.peer.on('connection', (conn) => {
-      this.handleDataConnection(conn);
-    });
-
-    this.peer.on('call', (call) => {
-      console.log('Incoming call from:', call.peer);
-      
-      // Safety check: close previous call from same peer if any
-      const existingCall = this.streamConnections.get(call.peer);
-      if (existingCall) {
-        console.log('Closing stale call from:', call.peer);
-        existingCall.close();
+      if (!this.peer) {
+        throw new Error('Peer constructor returned undefined');
       }
 
-      call.answer();
-      call.on('stream', (remoteStream) => {
-        console.log('Remote stream received from:', call.peer, 'Tracks:', remoteStream.getTracks().length);
-        this.onStreamReceivedCallbacks.forEach(cb => cb(remoteStream));
-      });
-      
-      call.on('error', (err) => {
-        console.error('Call error from ' + call.peer + ':', err);
+      this.peer.on('open', (id) => {
+        console.log('My peer ID is: ' + id);
+        this.onStatusChangeCallbacks.forEach(cb => cb('ready'));
       });
 
-      this.streamConnections.set(call.peer, call);
-    });
+      this.peer.on('disconnected', () => {
+        console.warn('Peer disconnected from signaling server. Attempting to reconnect...');
+        if (this.peer && !this.peer.destroyed) {
+          try {
+            this.peer.reconnect();
+          } catch (e) {
+            console.error('Reconnect failed:', e);
+          }
+        }
+      });
 
-    this.peer.on('error', (err) => {
-      console.error('Peer error:', err);
-      this.onErrorCallbacks.forEach(cb => cb(err));
-    });
+      this.peer.on('connection', (conn) => {
+        if (conn) this.handleDataConnection(conn);
+      });
+
+      this.peer.on('call', (call) => {
+        if (!call) return;
+        console.log('Incoming call from:', call.peer);
+        
+        // Safety check: close previous call from same peer if any
+        const existingCall = this.streamConnections.get(call.peer);
+        if (existingCall) {
+          console.log('Closing stale call from:', call.peer);
+          existingCall.close();
+        }
+
+        call.answer();
+        call.on('stream', (remoteStream) => {
+          console.log('Remote stream received from:', call.peer, 'Tracks:', remoteStream.getTracks().length);
+          this.onStreamReceivedCallbacks.forEach(cb => cb(remoteStream));
+        });
+        
+        call.on('error', (err) => {
+          console.error('Call error from ' + call.peer + ':', err);
+        });
+
+        this.streamConnections.set(call.peer, call);
+      });
+
+      this.peer.on('error', (err) => {
+        console.error('Peer error event:', err);
+        // If it's a "disconnected" type error, we might want to ignore if reconnecting
+        if (err.type === 'disconnected') return;
+        this.onErrorCallbacks.forEach(cb => cb(err));
+      });
+    } catch (e) {
+      console.error('Failed to initialize Peer:', e);
+    }
   }
 
   private handleDataConnection(conn: DataConnection) {
+    if (!conn) return;
+
     conn.on('open', () => {
       this.connections.set(conn.peer, conn);
       // Send handshake immediately
       conn.send({ 
         type: 'handshake', 
         payload: { displayName: this.displayName }, 
-        sender: this.peer?.id 
+        sender: this.peer?.id || 'unknown'
       });
       this.onPeerJoinedCallbacks.forEach(cb => cb(conn.peer));
     });
@@ -128,13 +152,44 @@ export class P2PManager {
   }
 
   public connect(remoteId: string) {
-    if (!this.peer) return;
-    const conn = this.peer.connect(remoteId);
-    this.handleDataConnection(conn);
+    if (!this.peer || this.peer.destroyed) {
+      console.warn('Cannot connect: Peer is destroyed or not initialized');
+      return;
+    }
+    
+    if (this.peer.disconnected) {
+      console.warn('Peer is disconnected from signaling server, attempting reconnect...');
+      try {
+        this.peer.reconnect();
+      } catch (e) {
+        console.error('Reconnect failed during connect:', e);
+      }
+      return;
+    }
+
+    try {
+      const conn = this.peer.connect(remoteId);
+      if (conn) this.handleDataConnection(conn);
+    } catch (e) {
+      console.error('Connect failed:', e);
+    }
   }
 
   public call(remoteId: string, stream: MediaStream) {
-    if (!this.peer) return;
+    if (!this.peer || this.peer.destroyed) {
+      console.warn('Cannot call: Peer is destroyed or not initialized');
+      return;
+    }
+    
+    if (this.peer.disconnected) {
+      console.warn('Peer is disconnected from signaling server, attempting reconnect...');
+      try {
+        this.peer.reconnect();
+      } catch (e) {
+        console.error('Reconnect failed during call:', e);
+      }
+      return;
+    }
     
     // Safety check: close previous call to same peer
     const existingCall = this.streamConnections.get(remoteId);
@@ -144,13 +199,17 @@ export class P2PManager {
     }
 
     console.log('Initiating call to:', remoteId);
-    const call = this.peer.call(remoteId, stream);
-    
-    call.on('error', (err) => {
-      console.error('Call outgoing error to ' + remoteId + ':', err);
-    });
-
-    this.streamConnections.set(remoteId, call);
+    try {
+      const call = this.peer.call(remoteId, stream);
+      if (call) {
+        call.on('error', (err) => {
+          console.error('Call outgoing error to ' + remoteId + ':', err);
+        });
+        this.streamConnections.set(remoteId, call);
+      }
+    } catch (e) {
+      console.error('Call failed:', e);
+    }
   }
 
   public broadcast(type: MessageType, payload: any, senderId?: string, senderName?: string) {
@@ -198,6 +257,13 @@ export class P2PManager {
   }
 
   public destroy() {
-    this.peer?.destroy();
+    if (this.peer) {
+      this.peer.destroy();
+      this.peer = null;
+    }
+  }
+
+  public isDestroyed() {
+    return !this.peer || this.peer.destroyed;
   }
 }
