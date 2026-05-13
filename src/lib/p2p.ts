@@ -42,18 +42,28 @@ export class P2PManager {
       this.peer = new Peer(this.peerId, {
         config: {
           iceServers: [
+            // Standard STUN servers (Public & Reliable)
             { urls: 'stun:stun.l.google.com:19302' },
             { urls: 'stun:stun1.l.google.com:19302' },
             { urls: 'stun:stun2.l.google.com:19302' },
             { urls: 'stun:stun3.l.google.com:19302' },
             { urls: 'stun:stun4.l.google.com:19302' },
-            { urls: 'stun:stun.ekiga.net' },
-            { urls: 'stun:stun.ideasip.com' },
-            { urls: 'stun:stun.schlund.de' },
-            { urls: 'stun:stun.voipstunt.com' },
+            { urls: 'stun:stun.stunprotocol.org:3478' },
             { urls: 'stun:stun.voxgratia.org' },
-            { urls: 'stun:stun.xten.com' },
+            { urls: 'stun:stun.sipgate.net:10000' },
+            { urls: 'stun:stun.netgear.com:3478' },
+            
+            // NOTE: For 100% reliability across strict corporate networks, 
+            // you would add a TURN server here. 
+            // Example for production (e.g., via Twilio or OpenRelay):
+            // {
+            //   urls: 'turn:your-turn-server.com:3478',
+            //   username: 'user',
+            //   credential: 'password'
+            // }
           ],
+          iceTransportPolicy: 'all',
+          iceCandidatePoolSize: 10,
         },
       });
 
