@@ -23,11 +23,14 @@ function generateRandomName() {
 export class P2PManager {
   private peer: Peer | null = null;
   private connections: Map<string, DataConnection> = new Map();
+  private children: Set<string> = new Set();
+  private parentPeerId: string | null = null;
   private streamConnections: Map<string, MediaConnection> = new Map();
   private peerNames: Map<string, string> = new Map();
   private activeStream: MediaStream | null = null;
-  private maxOutgoingStreams: number = 2; // Streaming Tree fan-out factor
+  private maxOutgoingStreams: number = 4; // Streaming Tree fan-out factor
   private seenMessages: Set<string> = new Set();
+  private reconnectTimeout: any = null;
   private onMessageCallbacks: ((msg: P2PMessage) => void)[] = [];
   private onPeerJoinedCallbacks: ((peerId: string) => void)[] = [];
   private onPeerLeftCallbacks: ((peerId: string) => void)[] = [];
@@ -87,13 +90,17 @@ export class P2PManager {
 
       this.peer.on('disconnected', () => {
         console.warn('Peer disconnected from signaling server. Attempting to reconnect...');
-        if (this.peer && !this.peer.destroyed) {
-          try {
-            this.peer.reconnect();
-          } catch (e) {
-            console.error('Reconnect failed:', e);
+        if (this.reconnectTimeout) clearTimeout(this.reconnectTimeout);
+        
+        this.reconnectTimeout = setTimeout(() => {
+          if (this.peer && !this.peer.destroyed && this.peer.disconnected) {
+            try {
+              this.peer.reconnect();
+            } catch (e) {
+              console.error('Reconnect failed:', e);
+            }
           }
-        }
+        }, 2000 + Math.random() * 3000); // jittered 2-5s delay
       });
 
       this.peer.on('connection', (conn) => {
@@ -139,39 +146,44 @@ export class P2PManager {
     }
   }
 
-  private handleDataConnection(conn: DataConnection) {
+  private handleDataConnection(conn: DataConnection, isIncoming: boolean = true) {
     if (!conn) return;
 
     conn.on('open', () => {
-      // REDIRECTION LOGIC: If I am at capacity, redirect this peer to one of my children
-      if (this.connections.size >= this.maxOutgoingStreams) {
+      // REDIRECTION LOGIC: Only apply to incoming connections (potential children)
+      if (isIncoming && this.children.size >= this.maxOutgoingStreams) {
         console.log('At capacity. Redirecting peer:', conn.peer);
-        const children = Array.from(this.connections.keys());
-        const target = children[Math.floor(Math.random() * children.length)];
+        const childrenArray = Array.from(this.children);
+        const target = childrenArray[Math.floor(Math.random() * childrenArray.length)];
         
         conn.send({
+          id: Math.random().toString(36).substr(2, 9),
           type: 'signal',
           payload: { action: 'redirect', targetPeerId: target },
           sender: this.peer?.id || 'unknown'
         });
 
-        // Close connection after a short delay to allow message to arrive
+        // Close connection after a short delay
         setTimeout(() => conn.close(), 1000);
         return;
       }
 
       this.connections.set(conn.peer, conn);
+      if (isIncoming) {
+        this.children.add(conn.peer);
+      }
       
       // Send handshake
       conn.send({ 
+        id: Math.random().toString(36).substr(2, 9),
         type: 'handshake', 
         payload: { displayName: this.displayName }, 
         sender: this.peer?.id || 'unknown'
       });
 
-      // If I already have a stream, call the new peer immediately
-      if (this.activeStream) {
-        console.log('New peer connected, starting stream call to:', conn.peer);
+      // If I already have a stream, call the new peer (if it's a child)
+      if (this.activeStream && isIncoming) {
+        console.log('New child connected, starting stream call to:', conn.peer);
         this.call(conn.peer, this.activeStream);
       }
 
@@ -211,13 +223,17 @@ export class P2PManager {
 
     conn.on('close', () => {
       this.connections.delete(conn.peer);
+      this.children.delete(conn.peer);
+      if (conn.peer === this.parentPeerId) {
+        this.parentPeerId = null;
+      }
       this.onPeerLeftCallbacks.forEach(cb => cb(conn.peer));
     });
   }
 
   private forwardStream(stream: MediaStream) {
-    console.log('Forwarding stream to', this.connections.size, 'peers');
-    this.connections.forEach((conn, peerId) => {
+    console.log('Forwarding stream to', this.children.size, 'children');
+    this.children.forEach((peerId) => {
       this.call(peerId, stream);
     });
   }
@@ -244,8 +260,9 @@ export class P2PManager {
     }
 
     try {
+      this.parentPeerId = remoteId;
       const conn = this.peer.connect(remoteId);
-      if (conn) this.handleDataConnection(conn);
+      if (conn) this.handleDataConnection(conn, false); // Not incoming (it's my parent)
     } catch (e) {
       console.error('Connect failed:', e);
     }
@@ -348,6 +365,7 @@ export class P2PManager {
   }
 
   public destroy() {
+    if (this.reconnectTimeout) clearTimeout(this.reconnectTimeout);
     if (this.peer) {
       this.peer.destroy();
       this.peer = null;

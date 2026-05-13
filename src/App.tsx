@@ -59,6 +59,7 @@ export default function App() {
   }, [isMobile]);
 
   const lastErrorRef = useRef<{ message: string; time: number } | null>(null);
+  const greetedPeers = useRef<Set<string>>(new Set());
 
   const addSystemMessage = (text: string) => {
     // Prevent duplicate error spam
@@ -164,14 +165,18 @@ export default function App() {
         }
       } else if (msg.type === 'handshake') {
         if (msg.payload.displayName) {
+          // Deduplicate "Joined" messages using peer ID
+          if (greetedPeers.current.has(msg.sender)) return;
+          greetedPeers.current.add(msg.sender);
+
           const urlParams = new URL(window.location.href).searchParams;
           const roomToJoin = urlParams.get('room') || targetId;
           
           if (!isHostRef.current && msg.sender === roomToJoin) {
             setHostName(msg.payload.displayName);
-            addSystemMessage(`You have joined ${msg.payload.displayName}'s room!`);
+            addSystemMessage(`You have joined ${msg.payload.displayName}'s swarm!`);
           } else {
-            addSystemMessage(`User ${msg.payload.displayName} joined the party!`);
+            addSystemMessage(`${msg.payload.displayName} joined the swarm`);
           }
         }
       } else if (msg.type === 'sync') {
@@ -247,6 +252,7 @@ export default function App() {
     });
 
     manager.onPeerLeft((id) => {
+      greetedPeers.current.delete(id);
       setActivePeers(prev => {
         const next = prev.filter(p => p !== id);
         if (isHostRef.current) {
@@ -465,9 +471,24 @@ export default function App() {
                       initial={{ opacity: 0, y: -10 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -10 }}
-                      className="text-red-500 text-xs bg-red-500/10 py-2 rounded-lg border border-red-500/20"
+                      className="w-full space-y-3"
                     >
-                      {connectionError}
+                      <div className="text-red-500 text-xs bg-red-500/10 py-3 px-4 rounded-xl border border-red-500/20">
+                        {connectionError}
+                      </div>
+                      <button 
+                        onClick={() => {
+                          if (p2pRef.current) p2pRef.current.destroy();
+                          const urlParams = new URL(window.location.href);
+                          const room = urlParams.searchParams.get('room');
+                          if (room) initP2P(room);
+                          else if (targetId) initP2P(targetId);
+                        }}
+                        className="text-xs text-zinc-400 hover:text-white flex items-center justify-center gap-2 mx-auto transition-colors"
+                      >
+                        <RefreshCcw size={14} />
+                        Retry Connection
+                      </button>
                     </motion.div>
                   )}
                 </AnimatePresence>
