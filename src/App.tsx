@@ -24,6 +24,8 @@ export default function App() {
   const [copied, setCopied] = useState(false);
   const [syncState, setSyncState] = useState<{ currentTime: number; paused: boolean }>({ currentTime: 0, paused: true });
   const [activePeers, setActivePeers] = useState<string[]>([]);
+  const [peerCountOverride, setPeerCountOverride] = useState<number | null>(null);
+  const [streamStatus, setStreamStatus] = useState<'idle' | 'capturing' | 'live' | 'error'>('idle');
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   const activeStreamRef = useRef<MediaStream | null>(null);
@@ -92,9 +94,7 @@ export default function App() {
         setSyncState(msg.payload);
       } else if (msg.type === 'info') {
         if (msg.payload.type === 'peer-count' && !isHostRef.current) {
-          // Only peers update their display count from host broadcast
-          const count = Math.max(0, msg.payload.count - 1);
-          setActivePeers(new Array(count).fill('peer'));
+          setPeerCountOverride(msg.payload.count);
         }
       }
     });
@@ -199,11 +199,32 @@ export default function App() {
   };
 
   const onStreamCreated = (stream: MediaStream) => {
+    console.log('Main App: Stream created/updated', stream.id, stream.getTracks().length);
     activeStreamRef.current = stream;
+    setStreamStatus('live');
     if (p2p && isHost) {
       activePeers.forEach(peerId => {
+        console.log('Calling peer with stream:', peerId);
         p2p.call(peerId, stream);
       });
+    }
+  };
+
+  const refreshStream = () => {
+    // This will trigger the CinemaPlayer to re-run its capture logic if it depends on something
+    // Or we can just find the video element and manually capture if needed.
+    // For now, let's just log and rely on the player's internal logic which we can nudge.
+    const video = document.querySelector('video');
+    if (video && isHost && onStreamCreated) {
+      console.log('Manually refreshing stream capture...');
+      setStreamStatus('capturing');
+      // @ts-ignore
+      const capture = video.captureStream ? video.captureStream(30) : (video.mozCaptureStream ? video.mozCaptureStream(30) : null);
+      if (capture) {
+        onStreamCreated(capture);
+      } else {
+        setStreamStatus('error');
+      }
     }
   };
 
@@ -238,7 +259,7 @@ export default function App() {
             )}
             <div className="flex items-center gap-2 text-zinc-500 text-sm">
               <Users size={16} />
-              <span>{activePeers.length + (peerId ? 1 : 0)} Users</span>
+              <span>{peerCountOverride !== null ? peerCountOverride : (activePeers.length + (peerId ? 1 : 0))} Users</span>
             </div>
           </div>
         </div>
@@ -321,14 +342,35 @@ export default function App() {
               
               <div className="p-6 bg-zinc-900/50 border border-white/5 rounded-2xl flex items-center justify-between">
                 <div>
-                  <h3 className="text-lg font-bold mb-1">
-                    {isHost ? 'Hosting Local File' : 'Watching Live Stream'}
-                  </h3>
-                  <div className="text-zinc-500 text-sm flex items-center gap-2">
+                  <div className="flex items-center gap-3">
+                    <h3 className="text-lg font-bold">
+                      {isHost ? 'Hosting Local File' : 'Watching Live Stream'}
+                    </h3>
+                    {isHost && (
+                      <div className="flex items-center gap-2">
+                        <button 
+                          onClick={refreshStream}
+                          className="px-2 py-0.5 text-[10px] uppercase tracking-wider font-bold bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white rounded border border-white/5 transition-all"
+                        >
+                          Refresh Stream
+                        </button>
+                        <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] uppercase tracking-widest font-bold border border-white/5 ${
+                          streamStatus === 'live' ? 'bg-green-500/10 text-green-500' : 
+                          streamStatus === 'capturing' ? 'bg-yellow-500/10 text-yellow-500' :
+                          streamStatus === 'error' ? 'bg-red-500/10 text-red-500' :
+                          'bg-zinc-800 text-zinc-500'
+                        }`}>
+                          {streamStatus === 'live' && <div className="w-1 h-1 bg-green-500 rounded-full animate-pulse" />}
+                          {streamStatus}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <div className="text-zinc-500 text-sm flex items-center gap-2 mt-1">
                     <span>{isHost ? 'Your friends are watching your shared stream.' : 'Connected to host. Playback is synchronized.'}</span>
                     <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-white/5 rounded-full text-xs font-medium text-zinc-400">
                       <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
-                      {activePeers.length + 1} {activePeers.length + 1 === 1 ? 'person' : 'people'} online
+                      {peerCountOverride !== null ? peerCountOverride : (activePeers.length + 1)} { (peerCountOverride !== null ? peerCountOverride : (activePeers.length + 1)) === 1 ? 'person' : 'people'} online
                     </span>
                   </div>
                 </div>

@@ -39,10 +39,10 @@ export default function CinemaPlayer({
           // @ts-ignore
           if (video.captureStream) {
             // @ts-ignore
-            capture = video.captureStream();
+            capture = video.captureStream(30); // 30fps hint
           } else if (video.mozCaptureStream) {
             // @ts-ignore
-            capture = video.mozCaptureStream();
+            capture = video.mozCaptureStream(30);
           }
           
           if (capture && capture.getVideoTracks().length > 0) {
@@ -75,7 +75,11 @@ export default function CinemaPlayer({
 
   useEffect(() => {
     if (videoRef.current && stream) {
+      console.log('Attaching stream to video element. Tracks:', stream.getTracks().length);
       videoRef.current.srcObject = stream;
+      videoRef.current.play().catch(err => {
+        console.log('Playback attempt failed (normal if no user interaction):', err);
+      });
     }
   }, [stream]);
 

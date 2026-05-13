@@ -43,11 +43,18 @@ export class P2PManager {
     });
 
     this.peer.on('call', (call) => {
+      console.log('Incoming call from:', call.peer);
       // For receivers, answer the call with no stream (if they are only watching)
       call.answer();
       call.on('stream', (remoteStream) => {
+        console.log('Remote stream received from:', call.peer);
         this.onStreamReceivedCallbacks.forEach(cb => cb(remoteStream));
       });
+      
+      call.on('error', (err) => {
+        console.error('Call error:', err);
+      });
+
       this.streamConnections.set(call.peer, call);
     });
 
