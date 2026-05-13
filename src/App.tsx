@@ -38,13 +38,28 @@ export default function App() {
     isHostRef.current = isHost;
   }, [isHost]);
 
+  const lastErrorRef = useRef<{ message: string; time: number } | null>(null);
+
   const addSystemMessage = (text: string) => {
-    setChatMessages(prev => [...prev, {
-      id: Math.random().toString(36).substr(2, 9),
-      sender: 'Broadcast',
-      text,
-      timestamp: Date.now()
-    }]);
+    // Prevent duplicate error spam
+    if (text.startsWith('Error:')) {
+      const now = Date.now();
+      if (lastErrorRef.current && lastErrorRef.current.message === text && now - lastErrorRef.current.time < 5000) {
+        return;
+      }
+      lastErrorRef.current = { message: text, time: now };
+    }
+
+    setChatMessages(prev => {
+      // Keep only last 100 messages for performance
+      const next = [...prev, {
+        id: Math.random().toString(36).substr(2, 9),
+        sender: 'Broadcast',
+        text,
+        timestamp: Date.now()
+      }];
+      return next.slice(-100);
+    });
   };
 
   const initP2P = (roomToJoin?: string) => {
@@ -101,7 +116,7 @@ export default function App() {
           text: payloadData.text,
           timestamp: Date.now()
         };
-        setChatMessages(prev => [...prev, message]);
+        setChatMessages(prev => [...prev, message].slice(-100));
         
         // Host relay: Send to everyone else
         if (isHostRef.current) {
@@ -128,6 +143,7 @@ export default function App() {
 
     manager.onPeerJoined((id) => {
       setIsConnected(true);
+      setConnectionError(null);
       setActivePeers(prev => {
         if (prev.includes(id)) return prev;
         const next = [...prev, id];
@@ -237,7 +253,7 @@ export default function App() {
         sender: 'You',
         text: inputText,
         timestamp: Date.now()
-      }]);
+      }].slice(-100));
       setInputText('');
     }
   };
@@ -500,10 +516,18 @@ export default function App() {
             </div>
 
             {/* Chat Section */}
-            <div className="flex flex-col h-[600px] lg:h-auto bg-zinc-900/50 border border-white/5 rounded-3xl overflow-hidden">
-              <div className="p-4 border-b border-white/5 bg-black/20 flex items-center gap-2">
-                <MessageSquare size={18} className="text-red-500" />
-                <span className="font-bold text-sm">Live Chat</span>
+            <div className="flex flex-col h-[500px] lg:h-[600px] bg-zinc-900/50 border border-white/5 rounded-3xl overflow-hidden sticky top-24">
+              <div className="p-4 border-b border-white/5 bg-black/20 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <MessageSquare size={18} className="text-red-500" />
+                  <span className="font-bold text-sm">Live Chat</span>
+                </div>
+                {isConnected && (
+                  <div className="flex items-center gap-1.5 px-2 py-0.5 bg-green-500/10 rounded-full text-[10px] font-bold text-green-500 uppercase tracking-wider">
+                    <div className="w-1 h-1 bg-green-500 rounded-full animate-pulse" />
+                    Connected
+                  </div>
+                )}
               </div>
 
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -520,7 +544,7 @@ export default function App() {
                         {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </span>
                     </div>
-                    <p className="text-sm text-zinc-300 leading-relaxed bg-black/20 p-2 rounded-lg border border-white/5">
+                    <p className="text-sm text-zinc-300 leading-relaxed bg-black/20 p-2 rounded-lg border border-white/5 break-words overflow-hidden">
                       {msg.text}
                     </p>
                   </div>
