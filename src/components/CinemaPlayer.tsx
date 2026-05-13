@@ -121,7 +121,7 @@ export default function CinemaPlayer({
       
       // Smooth out time sync - avoid jumping for tiny differences
       const timeDiff = Math.abs(video.currentTime - syncState.currentTime);
-      if (timeDiff > 2.0) {
+      if (timeDiff > 1.5) {
         console.log('Sync: Correcting time drift', timeDiff.toFixed(2), 's');
         video.currentTime = syncState.currentTime;
       }
@@ -152,14 +152,18 @@ export default function CinemaPlayer({
     emitSync();
   };
 
+  const lastSyncSecond = useRef<number>(-1);
+
   const handleTimeUpdate = () => {
     if (!videoRef.current) return;
     const current = videoRef.current.currentTime;
     const duration = videoRef.current.duration || 1;
     setProgress((current / duration) * 100);
     
-    // Host reports sync every 2 seconds or so
-    if (isHost && Math.floor(current) % 2 === 0) {
+    // Host reports sync every second change to stay tight without flooding
+    const currentSecond = Math.floor(current);
+    if (isHost && currentSecond !== lastSyncSecond.current) {
+      lastSyncSecond.current = currentSecond;
       emitSync();
     }
   };

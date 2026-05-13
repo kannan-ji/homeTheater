@@ -322,7 +322,7 @@ export default function App() {
   const refreshGuestStream = () => {
     if (p2p && !isHost) {
       addSystemMessage('Requesting stream refresh...');
-      p2p.broadcast('signal', 'ready-to-stream');
+      p2p.broadcast('signal', { action: 'ready-to-stream' });
     }
   };
 
@@ -616,116 +616,135 @@ export default function App() {
                         className="flex items-center justify-center gap-2 px-4 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white rounded-xl border border-white/5 transition-all text-sm font-medium w-full sm:w-auto min-w-[150px]"
                       >
                         <RefreshCcw size={16} className="text-zinc-400" />
-                        Refresh Stream
+                        Reset Stream
                       </button>
                     </div>
                   )}
                 </div>
               </div>
+
+              {!isHost && isConnected && !remoteStream && (
+                <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div className="flex items-center gap-2 text-red-500 text-sm">
+                    <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                    <span>Stream not received yet. This can happen on some networks.</span>
+                  </div>
+                  <button 
+                    onClick={refreshGuestStream}
+                    className="px-4 py-2 bg-red-600 text-white rounded-lg text-xs font-bold hover:bg-red-500 transition-colors flex items-center gap-2"
+                  >
+                    <RefreshCcw size={14} />
+                    Request Resync
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Chat Section */}
-            <AnimatePresence>
-              {(isChatVisible || !isMobile) && (
-                <motion.div 
-                  initial={{ opacity: 0, y: 20, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 20, scale: 0.95 }}
-                  className={`
-                    flex flex-col bg-zinc-950 lg:bg-zinc-900/50 border border-white/10 lg:border-white/5 rounded-3xl overflow-hidden
-                    ${isChatVisible ? 'fixed inset-4 z-[60] h-auto lg:relative lg:inset-auto lg:h-[600px] lg:z-0' : 'hidden lg:flex h-[600px] sticky top-24'}
-                  `}
-                >
-                  <div className="p-4 border-b border-white/5 bg-black/20 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <MessageSquare size={18} className="text-red-500" />
-                      <span className="font-bold text-sm">Live Chat</span>
+            <div className="relative">
+              <AnimatePresence>
+                {(isChatVisible || !isMobile) && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 20, scale: 0.95 }}
+                    className={`
+                      flex flex-col bg-zinc-950 lg:bg-zinc-900/50 border border-white/10 lg:border-white/5 rounded-3xl overflow-hidden
+                      ${isChatVisible ? 'fixed inset-4 z-[60] h-auto lg:relative lg:inset-auto lg:h-[600px] lg:z-0' : 'hidden lg:flex h-[600px] sticky top-24'}
+                    `}
+                  >
+                    <div className="p-4 border-b border-white/5 bg-black/20 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <MessageSquare size={18} className="text-red-500" />
+                        <span className="font-bold text-sm">Live Chat</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {isConnected && (
+                          <div className="flex items-center gap-1.5 px-2 py-0.5 bg-green-500/10 rounded-full text-[10px] font-bold text-green-500 uppercase tracking-wider">
+                            <div className="w-1 h-1 bg-green-500 rounded-full animate-pulse" />
+                            Connected
+                          </div>
+                        )}
+                        <button 
+                          onClick={() => setIsChatVisible(false)}
+                          className="lg:hidden p-1 hover:bg-white/10 rounded"
+                        >
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      {isConnected && (
-                        <div className="flex items-center gap-1.5 px-2 py-0.5 bg-green-500/10 rounded-full text-[10px] font-bold text-green-500 uppercase tracking-wider">
-                          <div className="w-1 h-1 bg-green-500 rounded-full animate-pulse" />
-                          Connected
+
+                    <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                      {chatMessages.length === 0 && (
+                        <div className="h-full flex items-center justify-center text-zinc-600 text-sm italic">
+                          No messages yet... say hi!
                         </div>
                       )}
-                      <button 
-                        onClick={() => setIsChatVisible(false)}
-                        className="lg:hidden p-1 hover:bg-white/10 rounded"
-                      >
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                    {chatMessages.length === 0 && (
-                      <div className="h-full flex items-center justify-center text-zinc-600 text-sm italic">
-                        No messages yet... say hi!
-                      </div>
-                    )}
-                    {chatMessages.map(msg => (
-                      <div key={msg.id} className="group">
-                        <div className="flex items-baseline gap-2 mb-1">
-                          <span className="font-bold text-xs text-red-400">{msg.sender}</span>
-                          <span className="text-[10px] text-zinc-600 font-mono">
-                            {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </span>
+                      {chatMessages.map(msg => (
+                        <div key={msg.id} className="group">
+                          <div className="flex items-baseline gap-2 mb-1">
+                            <span className="font-bold text-xs text-red-400">{msg.sender}</span>
+                            <span className="text-[10px] text-zinc-600 font-mono">
+                              {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                          <p className="text-sm text-zinc-300 leading-relaxed bg-black/20 p-2 rounded-lg border border-white/5 break-words overflow-hidden">
+                            {msg.text}
+                          </p>
                         </div>
-                        <p className="text-sm text-zinc-300 leading-relaxed bg-black/20 p-2 rounded-lg border border-white/5 break-words overflow-hidden">
-                          {msg.text}
-                        </p>
-                      </div>
-                    ))}
-                    <div ref={chatEndRef} />
-                  </div>
-
-                  <div className="p-4 bg-black/40 border-t border-white/5">
-                    <div className="relative">
-                      <input 
-                        type="text" 
-                        placeholder="Type a message..."
-                        value={inputText}
-                        onChange={(e) => setInputText(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-                        className="w-full bg-zinc-900 border border-white/10 rounded-xl px-4 py-3 pr-12 focus:outline-none focus:ring-2 focus:ring-red-500/50 transition-all text-sm"
-                      />
-                      <button 
-                        onClick={handleSendMessage}
-                        className="absolute right-2 top-1.5 p-2 bg-red-600 rounded-lg hover:bg-red-500 transition-colors"
-                      >
-                        <Send size={16} />
-                      </button>
+                      ))}
+                      <div ref={chatEndRef} />
                     </div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
 
-            {/* Mobile Chat Floating Button */}
-            {!isChatVisible && (
-              <motion.button
-                initial={{ scale: 0, rotate: -20 }}
-                animate={{ scale: 1, rotate: 0 }}
-                onClick={toggleChat}
-                className="lg:hidden fixed bottom-6 right-6 z-50 w-14 h-14 bg-red-600 text-white rounded-full shadow-2xl shadow-red-600/40 flex items-center justify-center border border-white/10"
-              >
-                <MessageSquare size={24} />
-                <AnimatePresence>
-                  {unreadCount > 0 && (
-                    <motion.div 
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      className="absolute -top-1 -right-1 bg-white text-red-600 text-xs font-bold w-6 h-6 rounded-full border-2 border-red-600 flex items-center justify-center shadow-lg"
-                    >
-                      {unreadCount}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </motion.button>
-            )}
+                    <div className="p-4 bg-black/40 border-t border-white/5">
+                      <div className="relative">
+                        <input 
+                          type="text" 
+                          placeholder="Type a message..."
+                          value={inputText}
+                          onChange={(e) => setInputText(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+                          className="w-full bg-zinc-900 border border-white/10 rounded-xl px-4 py-3 pr-12 focus:outline-none focus:ring-2 focus:ring-red-500/50 transition-all text-sm"
+                        />
+                        <button 
+                          onClick={handleSendMessage}
+                          className="absolute right-2 top-1.5 p-2 bg-red-600 rounded-lg hover:bg-red-500 transition-colors"
+                        >
+                          <Send size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Mobile Chat Floating Button */}
+              {!isChatVisible && (
+                <motion.button
+                  initial={{ scale: 0, rotate: -20 }}
+                  animate={{ scale: 1, rotate: 0 }}
+                  onClick={toggleChat}
+                  className="lg:hidden fixed bottom-6 right-6 z-50 w-14 h-14 bg-red-600 text-white rounded-full shadow-2xl shadow-red-600/40 flex items-center justify-center border border-white/10"
+                >
+                  <MessageSquare size={24} />
+                  <AnimatePresence>
+                    {unreadCount > 0 && (
+                      <motion.div 
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        className="absolute -top-1 -right-1 bg-white text-red-600 text-xs font-bold w-6 h-6 rounded-full border-2 border-red-600 flex items-center justify-center shadow-lg"
+                      >
+                        {unreadCount}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.button>
+              )}
+            </div>
           </div>
-        )}
-      </main>
+        )
+      }
+    </main>
 
       <footer className="mt-20 py-12 border-t border-white/5 text-center text-zinc-600 text-sm">
         <p>© 2026 homeTheater. P2P Powered Cinema.</p>

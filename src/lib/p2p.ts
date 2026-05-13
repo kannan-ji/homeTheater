@@ -40,9 +40,20 @@ export class P2PManager {
   private onStatusChangeCallbacks: ((status: string) => void)[] = [];
   public displayName: string;
 
+  private heartbeatInterval: any = null;
+
   constructor(private peerId?: string) {
     this.displayName = generateRandomName();
     this.init();
+    this.startHeartbeat();
+  }
+
+  private startHeartbeat() {
+    this.heartbeatInterval = setInterval(() => {
+      if (this.connections.size > 0) {
+        this.broadcast('signal', { action: 'heartbeat' });
+      }
+    }, 15000); // 15s heartbeat
   }
 
   private init() {
@@ -53,7 +64,12 @@ export class P2PManager {
             { urls: 'stun:stun.l.google.com:19302' },
             { urls: 'stun:stun1.l.google.com:19302' },
             { urls: 'stun:stun2.l.google.com:19302' },
+            { urls: 'stun:stun3.l.google.com:19302' },
+            { urls: 'stun:stun4.l.google.com:19302' },
             { urls: 'stun:stun.services.mozilla.com' },
+            { urls: 'stun:stun.sipgate.net:10000' },
+            { urls: 'stun:stun.voxgratia.org:3478' },
+            { urls: 'stun:stun.stunprotocol.org:3478' },
             {
               urls: [
                 'turn:openrelay.metered.ca:80',
@@ -223,6 +239,14 @@ export class P2PManager {
         }
       }
 
+      if (msg.type === 'signal') {
+        const payload = msg.payload;
+        if (payload?.action === 'ready-to-stream' && this.activeStream) {
+          console.log('Peer requested stream resync:', msg.sender);
+          this.call(msg.sender, this.activeStream);
+        }
+      }
+
       // RELAY to others (excluding the one who sent it)
       this.relay(msg, conn.peer);
       
@@ -386,6 +410,7 @@ export class P2PManager {
 
   public destroy() {
     if (this.reconnectTimeout) clearTimeout(this.reconnectTimeout);
+    if (this.heartbeatInterval) clearInterval(this.heartbeatInterval);
     if (this.peer) {
       this.peer.destroy();
       this.peer = null;
