@@ -28,32 +28,67 @@ export class P2PManager {
   private streamConnections: Map<string, MediaConnection> = new Map();
   private peerNames: Map<string, string> = new Map();
   private activeStream: MediaStream | null = null;
-  private maxOutgoingStreams: number = 8; // Increased to prioritize direct host->peer (Star topology)
+  private maxOutgoingStreams: number = 8;
   private seenMessages: Set<string> = new Set();
   private reconnectTimeout: any = null;
   private forwardThrottles: Map<string, number> = new Map();
+  private latencies: Map<string, number> = new Map();
   private onMessageCallbacks: ((msg: P2PMessage) => void)[] = [];
   private onPeerJoinedCallbacks: ((peerId: string) => void)[] = [];
   private onPeerLeftCallbacks: ((peerId: string) => void)[] = [];
   private onStreamReceivedCallbacks: ((stream: MediaStream) => void)[] = [];
   private onErrorCallbacks: ((error: any) => void)[] = [];
   private onStatusChangeCallbacks: ((status: string) => void)[] = [];
+  private onStatsUpdateCallbacks: ((stats: any) => void)[] = [];
   public displayName: string;
 
   private heartbeatInterval: any = null;
+  private statsInterval: any = null;
 
   constructor(private peerId?: string) {
     this.displayName = generateRandomName();
     this.init();
     this.startHeartbeat();
+    this.startStatsReporting();
+  }
+
+  private startStatsReporting() {
+    this.statsInterval = setInterval(() => {
+      const stats = {
+        peers: this.connections.size,
+        children: this.children.size,
+        parents: this.parentPeerId ? 1 : 0,
+        activeStream: !!this.activeStream,
+        tracks: this.activeStream ? this.activeStream.getTracks().length : 0,
+        peerId: this.peer?.id,
+        latencies: Object.fromEntries(this.latencies)
+      };
+      this.onStatsUpdateCallbacks.forEach(cb => cb(stats));
+    }, 2000);
+  }
+
+  public onStatsUpdate(callback: (stats: any) => void) {
+    this.onStatsUpdateCallbacks.push(callback);
   }
 
   private startHeartbeat() {
     this.heartbeatInterval = setInterval(() => {
-      if (this.connections.size > 0) {
-        this.broadcast('signal', { action: 'heartbeat' });
+      if (this.peer && !this.peer.destroyed) {
+        if (this.connections.size > 0) {
+          const now = Date.now();
+          this.broadcast('signal', { action: 'heartbeat', timestamp: now });
+          // Also ping individually for latency tracking
+          this.connections.forEach(conn => {
+            conn.send({
+              id: 'ping-' + Math.random().toString(36).substr(2, 5),
+              type: 'signal',
+              payload: { action: 'ping', sentAt: now },
+              sender: this.peer?.id || 'unknown'
+            });
+          });
+        }
       }
-    }, 15000); // 15s heartbeat
+    }, 10000); 
   }
 
   private init() {
@@ -83,6 +118,7 @@ export class P2PManager {
           iceTransportPolicy: 'all',
           iceCandidatePoolSize: 10,
         },
+        debug: 1 // Only errors
       });
 
       if (!this.peer) {
@@ -243,7 +279,31 @@ export class P2PManager {
         const payload = msg.payload;
         if (payload?.action === 'ready-to-stream' && this.activeStream) {
           console.log('Peer requested stream resync:', msg.sender);
-          this.call(msg.sender, this.activeStream);
+          const existing = this.streamConnections.get(msg.sender);
+          if (existing) {
+            try { existing.close(); } catch (e) {}
+            this.streamConnections.delete(msg.sender);
+          }
+          // Small delay before retry to ensure cleanup
+          setTimeout(() => {
+            if (this.activeStream && this.connections.has(msg.sender)) {
+              this.call(msg.sender, this.activeStream);
+            }
+          }, 800);
+        }
+        if (payload?.action === 'ping') {
+          conn.send({
+            id: Math.random().toString(36).substr(2, 9),
+            type: 'signal',
+            payload: { action: 'pong', pingId: msg.id, sentAt: payload.sentAt },
+            sender: this.peer?.id || 'unknown'
+          });
+        }
+        if (payload?.action === 'pong') {
+          const sentAt = payload.sentAt;
+          if (sentAt) {
+            this.latencies.set(msg.sender, Date.now() - sentAt);
+          }
         }
       }
 
@@ -411,6 +471,7 @@ export class P2PManager {
   public destroy() {
     if (this.reconnectTimeout) clearTimeout(this.reconnectTimeout);
     if (this.heartbeatInterval) clearInterval(this.heartbeatInterval);
+    if (this.statsInterval) clearInterval(this.statsInterval);
     if (this.peer) {
       this.peer.destroy();
       this.peer = null;

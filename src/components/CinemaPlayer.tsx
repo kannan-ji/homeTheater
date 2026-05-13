@@ -98,11 +98,20 @@ export default function CinemaPlayer({
       const video = videoRef.current;
       console.log('Attaching stream to video element. ID:', stream.id, 'Tracks:', stream.getTracks().length);
       
+      // Monitor tracks
+      stream.getTracks().forEach(track => {
+        console.log(`Track: ${track.kind} - ${track.label} (${track.readyState})`);
+        track.onunmute = () => {
+          console.log(`Track unmuted: ${track.kind} - ${track.label}`);
+          video.play().catch(e => console.warn('Play interrupted after unmute:', e.name));
+        };
+      });
+
       // Some browsers need a slight nudge or unmuted state to start a MediaStream
       video.srcObject = stream;
       
       const handleStreamReady = () => {
-        console.log('Stream ready to play. Video tracks:', stream.getVideoTracks().map(t => `${t.label} (${t.readyState})`));
+        console.log('Stream ready event triggered. Video tracks:', stream.getVideoTracks().map(t => `${t.label} (${t.readyState})`));
         video.play().catch(err => {
           console.warn('Initial stream playback failed (normal):', err.name);
           if (!isHost && onPlaybackBlocked) onPlaybackBlocked();
@@ -110,7 +119,11 @@ export default function CinemaPlayer({
       };
 
       video.addEventListener('loadedmetadata', handleStreamReady);
-      return () => video.removeEventListener('loadedmetadata', handleStreamReady);
+      video.addEventListener('canplay', handleStreamReady);
+      return () => {
+        video.removeEventListener('loadedmetadata', handleStreamReady);
+        video.removeEventListener('canplay', handleStreamReady);
+      };
     }
   }, [stream, isHost, onPlaybackBlocked]);
 

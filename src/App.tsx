@@ -32,6 +32,7 @@ export default function App() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth < 1024 : false);
   const [hostName, setHostName] = useState<string>('');
+  const [swarmStats, setSwarmStats] = useState<any>(null);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 1024);
@@ -143,6 +144,10 @@ export default function App() {
       setConnectionError(errorMsg);
       setIsConnecting(false);
       addSystemMessage(`Error: ${errorMsg}`);
+    });
+
+    manager.onStatsUpdate((stats) => {
+      setSwarmStats(stats);
     });
 
     manager.onMessage((msg: P2PMessage) => {
@@ -356,6 +361,11 @@ export default function App() {
       const capture = video.captureStream ? video.captureStream(30) : (video.mozCaptureStream ? video.mozCaptureStream(30) : null);
       if (capture) {
         onStreamCreated(capture);
+        // Force a sync message as well
+        onSync({
+          currentTime: video.currentTime,
+          paused: video.paused
+        });
       } else {
         setStreamStatus('error');
       }
@@ -742,9 +752,57 @@ export default function App() {
               )}
             </div>
           </div>
-        )
-      }
-    </main>
+        )}
+        
+        {/* Swarm Dashboard (Debugging & Status) */}
+        {isConnected && swarmStats && (
+          <div className="mt-8 border-t border-white/5 pt-8">
+            <div className="flex items-center gap-2 mb-4 text-zinc-500">
+              <Users size={16} />
+              <h4 className="text-xs font-bold uppercase tracking-widest">Swarm Health Dashboard</h4>
+            </div>
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+              <div className="bg-zinc-900/40 border border-white/5 p-4 rounded-2xl">
+                <p className="text-[10px] text-zinc-500 uppercase font-bold mb-1">Network Topology</p>
+                <div className="text-sm font-medium">
+                  {swarmStats.parents > 0 ? 'Relay Node' : 'Root Seeder'}
+                  <span className="text-zinc-600 block text-[10px] font-mono mt-0.5">{swarmStats.peerId?.slice(0, 8)}...</span>
+                </div>
+              </div>
+              <div className="bg-zinc-900/40 border border-white/5 p-4 rounded-2xl">
+                <p className="text-[10px] text-zinc-500 uppercase font-bold mb-1">Downstream Peers</p>
+                <div className="flex items-center gap-2">
+                  <span className="text-xl font-bold">{swarmStats.children}</span>
+                  <span className="text-[10px] text-zinc-600">Peers following you</span>
+                </div>
+              </div>
+              <div className="bg-zinc-900/40 border border-white/5 p-4 rounded-2xl">
+                <p className="text-[10px] text-zinc-500 uppercase font-bold mb-1">Stream Status</p>
+                <div className="flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${swarmStats.activeStream && swarmStats.tracks > 0 ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+                  <span className="text-sm font-medium">{swarmStats.activeStream ? `${swarmStats.tracks} Tracks` : 'No Signal'}</span>
+                </div>
+              </div>
+              <div className="bg-zinc-900/40 border border-white/5 p-4 rounded-2xl">
+                <p className="text-[10px] text-zinc-500 uppercase font-bold mb-1">Time Sync</p>
+                <div className="flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${syncState.paused ? 'bg-zinc-600' : 'bg-green-500'}`} />
+                  <span className="text-sm font-medium">{syncState.paused ? 'Paused' : 'Playing'}</span>
+                  <span className="text-[10px] text-zinc-600 font-mono">@{Math.floor(syncState.currentTime)}s</span>
+                </div>
+              </div>
+              <div className="bg-zinc-900/40 border border-white/5 p-4 rounded-2xl">
+                <p className="text-[10px] text-zinc-500 uppercase font-bold mb-1">Avg Latency</p>
+                <p className="text-sm font-medium">
+                  {swarmStats.latencies && Object.keys(swarmStats.latencies).length > 0 
+                    ? `${Math.round(Object.values(swarmStats.latencies).reduce((a: any, b: any) => a + b, 0) as number / Object.keys(swarmStats.latencies).length)} ms`
+                    : '--'}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
 
       <footer className="mt-20 py-12 border-t border-white/5 text-center text-zinc-600 text-sm">
         <p>© 2026 homeTheater. P2P Powered Cinema.</p>
