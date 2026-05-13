@@ -153,12 +153,12 @@ export class P2PManager {
     this.streamConnections.set(remoteId, call);
   }
 
-  public broadcast(type: MessageType, payload: any) {
+  public broadcast(type: MessageType, payload: any, senderId?: string, senderName?: string) {
     const msg: P2PMessage = { 
       type, 
       payload, 
-      sender: this.peer?.id || 'unknown',
-      senderName: this.displayName
+      sender: senderId || this.peer?.id || 'unknown',
+      senderName: senderName || this.displayName
     };
     this.connections.forEach(conn => {
       conn.send(msg);

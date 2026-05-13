@@ -105,10 +105,7 @@ export default function App() {
         
         // Host relay: Send to everyone else
         if (isHostRef.current) {
-          manager.broadcast('chat', { 
-            text: payloadData.text, 
-            originalSender: payloadData.originalSender 
-          });
+          manager.broadcast('chat', payloadData, msg.sender, msg.senderName);
         }
       } else if (msg.type === 'sync') {
         setSyncState(msg.payload);
@@ -329,6 +326,10 @@ export default function App() {
                 <div className="flex items-center gap-2 text-zinc-500 text-sm">
                   <Users size={16} />
                   <span>{peerCountOverride !== null ? peerCountOverride : (activePeers.length + (peerId ? 1 : 0))} Online</span>
+                </div>
+                <div className="h-4 w-px bg-white/10" />
+                <div className="text-zinc-500 text-sm font-medium">
+                  as <span className="text-red-400">{p2p?.displayName}</span>
                 </div>
               </>
             )}
