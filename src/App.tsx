@@ -31,6 +31,7 @@ export default function App() {
   const [isChatVisible, setIsChatVisible] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth < 1024 : false);
+  const [hostName, setHostName] = useState<string>('');
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 1024);
@@ -168,8 +169,11 @@ export default function App() {
         }
       } else if (msg.type === 'handshake') {
         if (msg.payload.displayName) {
-          const roomToJoin = new URLSearchParams(window.location.search).get('room');
+          const urlParams = new URL(window.location.href).searchParams;
+          const roomToJoin = urlParams.get('room') || targetId;
+          
           if (!isHostRef.current && msg.sender === roomToJoin) {
+            setHostName(msg.payload.displayName);
             addSystemMessage(`You have joined ${msg.payload.displayName}'s room!`);
           } else {
             addSystemMessage(`User ${msg.payload.displayName} joined the party!`);
@@ -204,6 +208,8 @@ export default function App() {
         // Host: Sync peer count to everyone
         if (isHostRef.current) {
           setTimeout(() => {
+            // Re-send handshake to ensure everyone knows the host name
+            manager.broadcast('handshake', { displayName: manager.displayName });
             manager.broadcast('info', { type: 'peer-count', count: next.length + 1 });
           }, 1000);
         }
@@ -386,27 +392,10 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-4">
-            {isConnected && (
-              <>
-                {isHost && peerId && (
-                  <button 
-                    onClick={copyInviteLink}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-900 border border-white/5 hover:border-white/10 transition-all text-sm font-medium"
-                  >
-                    <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                    <span className="text-zinc-400">ID:</span> {peerId.slice(0, 8)}...
-                    {copied ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
-                  </button>
-                )}
-                <div className="flex items-center gap-2 text-zinc-500 text-sm">
-                  <Users size={16} />
-                  <span>{peerCountOverride !== null ? peerCountOverride : (activePeers.length + (peerId ? 1 : 0))} Online</span>
-                </div>
-                <div className="h-4 w-px bg-white/10" />
-                <div className="text-zinc-500 text-sm font-medium">
-                  as <span className="text-red-400">{p2p?.displayName}</span>
-                </div>
-              </>
+            {p2p && (
+              <div className="text-zinc-500 text-sm font-medium">
+                {isHost ? 'Hosting' : 'Watching'} as <span className="text-red-400">{p2p.displayName}</span>
+              </div>
             )}
           </div>
         </div>
@@ -530,7 +519,7 @@ export default function App() {
                     )}
                   </div>
                   <div className="text-zinc-500 text-sm flex flex-col sm:flex-row sm:items-center gap-2 mt-2 sm:mt-1">
-                    <span>{isHost ? 'Your friends are watching your shared stream.' : 'Connected to host. Playback is synchronized.'}</span>
+                    {!isHost && <span>{`Watching ${hostName || 'Host'}'s live stream.`}</span>}
                     {isConnected && (
                       <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-white/5 rounded-full text-xs font-medium text-zinc-400 w-fit">
                         <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
@@ -578,7 +567,7 @@ export default function App() {
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 20, scale: 0.95 }}
                   className={`
-                    flex flex-col bg-zinc-900/90 lg:bg-zinc-900/50 border border-white/10 lg:border-white/5 rounded-3xl overflow-hidden
+                    flex flex-col bg-zinc-950 lg:bg-zinc-900/50 border border-white/10 lg:border-white/5 rounded-3xl overflow-hidden
                     ${isChatVisible ? 'fixed inset-4 z-[60] h-auto lg:relative lg:inset-auto lg:h-[600px] lg:z-0' : 'hidden lg:flex h-[600px] sticky top-24'}
                   `}
                 >
@@ -648,7 +637,7 @@ export default function App() {
             </AnimatePresence>
 
             {/* Mobile Chat Floating Button */}
-            {!isChatVisible && isConnected && (
+            {!isChatVisible && (
               <motion.button
                 initial={{ scale: 0, rotate: -20 }}
                 animate={{ scale: 1, rotate: 0 }}
