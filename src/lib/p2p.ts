@@ -42,7 +42,7 @@ export class P2PManager {
       this.peer = new Peer(this.peerId, {
         config: {
           iceServers: [
-            // Standard STUN servers (Public & Reliable)
+            // Open source / Community STUN servers
             { urls: 'stun:stun.l.google.com:19302' },
             { urls: 'stun:stun1.l.google.com:19302' },
             { urls: 'stun:stun2.l.google.com:19302' },
@@ -52,15 +52,20 @@ export class P2PManager {
             { urls: 'stun:stun.voxgratia.org' },
             { urls: 'stun:stun.sipgate.net:10000' },
             { urls: 'stun:stun.netgear.com:3478' },
+            { urls: 'stun:stun.t-online.de:3478' },
+            { urls: 'stun:stun.1und1.de:3478' },
             
-            // NOTE: For 100% reliability across strict corporate networks, 
-            // you would add a TURN server here. 
-            // Example for production (e.g., via Twilio or OpenRelay):
-            // {
-            //   urls: 'turn:your-turn-server.com:3478',
-            //   username: 'user',
-            //   credential: 'password'
-            // }
+            // TURN servers (Forwarding / Relay) - "Path B"
+            // These solve issues where symmetric NATs prevent direct connection.
+            {
+              urls: [
+                'turn:openrelay.metered.ca:80',
+                'turn:openrelay.metered.ca:443',
+                'turn:openrelay.metered.ca:443?transport=tcp'
+              ],
+              username: 'openrelayproject',
+              credential: 'openrelayproject'
+            }
           ],
           iceTransportPolicy: 'all',
           iceCandidatePoolSize: 10,

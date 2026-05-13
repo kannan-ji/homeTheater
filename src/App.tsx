@@ -395,7 +395,7 @@ export default function App() {
             {p2p && (
               <>
                 <div className="text-zinc-500 text-sm font-medium">
-                  {isHost ? 'Hosting' : 'Watching'} as <span className="text-red-400">{p2p.displayName}</span>
+                  {isHost ? 'Seeding' : 'Connected'} as <span className="text-red-400">{p2p.displayName}</span>
                 </div>
               </>
             )}
@@ -415,9 +415,9 @@ export default function App() {
               <div className="w-16 h-16 bg-red-500/10 rounded-2xl flex items-center justify-center text-red-500 mb-6 group-hover:scale-110 transition-transform">
                 <Monitor size={32} />
               </div>
-              <h2 className="text-2xl font-bold mb-2">Host a Session</h2>
+              <h2 className="text-2xl font-bold mb-2">Seed a Session</h2>
               <p className="text-zinc-400 mb-8 max-w-[280px]">
-                Stream a local video file from your system. Your friends can join via your Room ID.
+                Stream a local video file from your system. Your friends can join via your Swarm ID.
               </p>
               
               <label className="w-full">
@@ -443,9 +443,9 @@ export default function App() {
               <div className="w-16 h-16 bg-white/5 rounded-2xl flex items-center justify-center text-white mb-6 group-hover:scale-110 transition-transform">
                 <Link2 size={32} />
               </div>
-              <h2 className="text-2xl font-bold mb-2">Join a Session</h2>
+              <h2 className="text-2xl font-bold mb-2">Join a Swarm</h2>
               <p className="text-zinc-400 mb-8 max-w-[280px]">
-                Already have a Room ID? Paste it below to join your friend's cinema room.
+                Already have a Swarm ID? Paste it below to join your friend's cinema swarm.
               </p>
               
               <div className="w-full space-y-4">
@@ -483,7 +483,7 @@ export default function App() {
                       <div className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full animate-spin" />
                       Connecting...
                     </>
-                  ) : 'Join Room'}
+                  ) : 'Enter Swarm'}
                 </button>
               </div>
             </motion.div>
@@ -504,7 +504,7 @@ export default function App() {
                 <div className="w-full sm:w-auto">
                   <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
                     <h3 className="text-lg font-bold">
-                      {isHost ? 'Hosting Local File' : 'Watching Live Stream'}
+                      {isHost ? 'Seeding Local File' : 'Connected to Swarm'}
                     </h3>
                     {isHost && (
                       <div className="flex items-center gap-2">
@@ -521,7 +521,7 @@ export default function App() {
                     )}
                   </div>
                   <div className="text-zinc-500 text-sm flex flex-col sm:flex-row sm:items-center gap-2 mt-2 sm:mt-1">
-                    {!isHost && <span>{`Watching ${hostName || 'Host'}'s live stream.`}</span>}
+                    {!isHost && <span>{`Connected to ${hostName || 'Seeder'}'s live stream.`}</span>}
                     {isConnected && (
                       <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-white/5 rounded-full text-xs font-medium text-zinc-400 w-fit">
                         <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
@@ -542,7 +542,7 @@ export default function App() {
                       onClick={leaveParty}
                       className="px-4 py-2 bg-red-600/10 hover:bg-red-600/20 text-red-500 rounded-xl border border-red-500/20 transition-all text-sm font-medium"
                     >
-                      Leave Room
+                      Leave Swarm
                     </button>
                   ) : (
                     <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
@@ -551,7 +551,7 @@ export default function App() {
                         className="flex items-center justify-center gap-2 px-4 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl transition-all shadow-lg shadow-red-600/20 text-sm font-bold w-full sm:w-auto bg-nowrap min-w-[180px]"
                       >
                         {copied ? <Check size={18} /> : <Share2 size={18} />}
-                        {copied ? 'Copied Invite Link!' : 'Share Room Link'}
+                        {copied ? 'Copied Invite Link!' : 'Share Swarm Link'}
                       </button>
                       <button 
                         onClick={refreshStream}
