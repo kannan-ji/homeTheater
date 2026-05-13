@@ -122,6 +122,11 @@ export default function App() {
         if (isHostRef.current) {
           manager.broadcast('chat', payloadData, msg.sender, msg.senderName);
         }
+      } else if (msg.type === 'handshake') {
+        if (msg.payload.displayName) {
+          // Notify that the user joined with their chosen name
+          addSystemMessage(`User ${msg.payload.displayName} joined the party!`);
+        }
       } else if (msg.type === 'sync') {
         setSyncState(msg.payload);
       } else if (msg.type === 'info') {
@@ -156,7 +161,6 @@ export default function App() {
         }
         return next;
       });
-      addSystemMessage(`User ${manager.getPeerName(id)} joined the party!`);
 
       // If I am NOT the host, I just joined someone. Let them know I'm ready for the stream.
       if (!isHostRef.current) {
@@ -489,20 +493,12 @@ export default function App() {
                 
                 <div className="flex gap-2">
                   {!isHost ? (
-                    <>
-                      <button 
-                        onClick={refreshGuestStream}
-                        className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-xl border border-white/5 transition-all text-sm font-medium"
-                      >
-                        Refresh Room
-                      </button>
-                      <button 
-                        onClick={leaveParty}
-                        className="px-4 py-2 bg-red-600/10 hover:bg-red-600/20 text-red-500 rounded-xl border border-red-500/20 transition-all text-sm font-medium"
-                      >
-                        Leave Room
-                      </button>
-                    </>
+                    <button 
+                      onClick={leaveParty}
+                      className="px-4 py-2 bg-red-600/10 hover:bg-red-600/20 text-red-500 rounded-xl border border-red-500/20 transition-all text-sm font-medium"
+                    >
+                      Leave Room
+                    </button>
                   ) : (
                     <button 
                       onClick={copyInviteLink}
