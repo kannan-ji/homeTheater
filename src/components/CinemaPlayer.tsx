@@ -31,7 +31,15 @@ export default function CinemaPlayer({
 
   useEffect(() => {
     if (videoRef.current && src) {
-      videoRef.current.src = src;
+      // Very important: don't re-set src if it's already the same URL
+      // This prevents the video from restarting when the host component re-renders
+      const currentSrc = videoRef.current.src;
+      if (currentSrc && (currentSrc.includes(src) || videoRef.current.currentSrc.includes(src))) {
+        // Skip re-setting src
+      } else {
+        videoRef.current.src = src;
+      }
+      
       // When the host starts playing a local file, capture the stream
       if (isHost && onStreamCreated) {
         const video = videoRef.current;
@@ -79,10 +87,12 @@ export default function CinemaPlayer({
     if (videoRef.current && stream) {
       if (videoRef.current.srcObject === stream) return;
       
-      console.log('Attaching stream to video element. Tracks:', stream.getTracks().length);
+      console.log('Attaching stream to video element. ID:', stream.id);
       videoRef.current.srcObject = stream;
+      
+      // Attempt autoplay (likely to fail if not interacted, handled by parent overlay)
       videoRef.current.play().catch(err => {
-        console.log('Playback attempt failed (normal if no user interaction):', err);
+        console.warn('Initial stream autoplay blocked:', err.name);
         if (!isHost && onPlaybackBlocked) {
           onPlaybackBlocked();
         }
@@ -93,14 +103,20 @@ export default function CinemaPlayer({
   // Sync state from host to peer
   useEffect(() => {
     if (!isHost && syncState && videoRef.current) {
-      const diff = Math.abs(videoRef.current.currentTime - syncState.currentTime);
-      if (diff > 1) { // Only force sync if they are out of sync by more than 1s
-        videoRef.current.currentTime = syncState.currentTime;
+      const video = videoRef.current;
+      
+      // Time sync
+      if (Math.abs(video.currentTime - syncState.currentTime) > 1.5) {
+        video.currentTime = syncState.currentTime;
       }
-      if (syncState.paused !== videoRef.current.paused) {
-        if (syncState.paused) videoRef.current.pause();
-        else {
-          videoRef.current.play().catch(() => {
+
+      // Play/Pause sync
+      if (syncState.paused !== video.paused) {
+        if (syncState.paused) {
+          video.pause();
+        } else {
+          video.play().catch(() => {
+            // Only signal blocked if we're actually supposed to be playing
             if (onPlaybackBlocked) onPlaybackBlocked();
           });
         }

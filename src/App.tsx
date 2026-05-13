@@ -243,11 +243,19 @@ export default function App() {
     });
 
     manager.onStreamReceived((stream) => {
-      console.log('Stream received with ID:', stream.id);
-      if (remoteStreamRef.current?.id === stream.id) return;
+      // Track-based fingerprinting as final safety
+      const trackIds = stream.getTracks().map(t => t.id).sort().join(',');
+      const existingTrackIds = remoteStreamRef.current?.getTracks().map(t => t.id).sort().join(',');
       
+      if (remoteStreamRef.current?.id === stream.id || trackIds === existingTrackIds) {
+        console.log('App ignored redundant stream notification');
+        return;
+      }
+      
+      console.log('App applying new stream:', stream.id);
       remoteStreamRef.current = stream;
       setRemoteStream(stream);
+      // We set status to live but CinemaPlayer will signal paused if blocked
       setStreamStatus('live');
     });
 
@@ -326,15 +334,15 @@ export default function App() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const onStreamCreated = (stream: MediaStream) => {
+  const onStreamCreated = React.useCallback((stream: MediaStream) => {
     console.log('Main App: Stream created/updated', stream.id, stream.getTracks().length);
     activeStreamRef.current = stream;
     setStreamStatus('live');
-    if (p2p && isHost) {
+    if (p2pRef.current && isHostRef.current) {
       console.log('Setting local stream for swarm broadcast');
-      p2p.setLocalStream(stream);
+      p2pRef.current.setLocalStream(stream);
     }
-  };
+  }, []);
 
   const refreshStream = () => {
     // This will trigger the CinemaPlayer to re-run its capture logic if it depends on something
@@ -354,11 +362,11 @@ export default function App() {
     }
   };
 
-  const onSync = (state: { currentTime: number; paused: boolean }) => {
-    if (p2p && isHost) {
-      p2p.broadcast('sync', state);
+  const onSync = React.useCallback((state: { currentTime: number; paused: boolean }) => {
+    if (p2pRef.current && isHostRef.current) {
+      p2pRef.current.broadcast('sync', state);
     }
-  };
+  }, []);
 
   const toggleChat = () => {
     setIsChatVisible(!isChatVisible);
@@ -367,13 +375,14 @@ export default function App() {
     }
   };
 
-  const handleGuestPlay = () => {
+  const handleGuestPlay = React.useCallback(() => {
     const video = document.querySelector('video');
     if (video) {
+      video.muted = false;
       video.play().catch(err => console.error('Manual play failed:', err));
       setStreamStatus('live');
     }
-  };
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#09090b] text-zinc-100 selection:bg-red-500/30 selection:text-red-200">

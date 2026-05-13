@@ -125,13 +125,16 @@ export class P2PManager {
         call.answer();
         
         call.on('stream', (remoteStream) => {
-          // If this is the same stream ID we already have, ignore
-          if (this.activeStream && this.activeStream.id === remoteStream.id) {
-            console.log('Ignore redundant stream with same ID from ' + call.peer);
+          // Track fingerprinting: track IDs are consistent even if the stream wrapper changes
+          const trackIds = remoteStream.getTracks().map(t => t.id).sort().join(',');
+          const existingTrackIds = this.activeStream?.getTracks().map(t => t.id).sort().join(',');
+          
+          if (this.activeStream && (this.activeStream.id === remoteStream.id || trackIds === existingTrackIds)) {
+            console.log('Ignore redundant stream from ' + call.peer);
             return;
           }
 
-          console.log('Remote stream received from:', call.peer, 'ID:', remoteStream.id);
+          console.log('New remote stream received from:', call.peer, 'ID:', remoteStream.id);
           this.activeStream = remoteStream;
           this.onStreamReceivedCallbacks.forEach(cb => cb(remoteStream));
           
