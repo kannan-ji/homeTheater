@@ -1,10 +1,12 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { Play, Pause, Volume2, VolumeX, Maximize, User, Users, Share2, Copy, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { getTorrentClient } from '../lib/torrent';
 
 interface CinemaPlayerProps {
   src?: string;
   stream?: MediaStream;
+  magnetURI?: string;
   onStreamCreated?: (stream: MediaStream) => void;
   onPlaybackBlocked?: () => void;
   onSync?: (state: { currentTime: number; paused: boolean; duration: number }) => void;
@@ -15,6 +17,7 @@ interface CinemaPlayerProps {
 export default function CinemaPlayer({ 
   src, 
   stream, 
+  magnetURI,
   onStreamCreated, 
   onPlaybackBlocked,
   onSync,
@@ -93,46 +96,39 @@ export default function CinemaPlayer({
   }, [src, isHost, onStreamCreated]);
 
   useEffect(() => {
-    if (videoRef.current && stream) {
-      if (videoRef.current.srcObject === stream) return;
-      
+    if (!isHost && magnetURI && videoRef.current) {
       const video = videoRef.current;
-      console.log('Attaching stream to video element. ID:', stream.id, 'Tracks:', stream.getTracks().length);
+      const wt = getTorrentClient();
       
-      // Crucial: clear standard src when attaching srcObject, else some browsers get confused
-      if (video.src) {
-        video.src = "";
-        video.removeAttribute('src');
-      }
+      console.log('Got magnet URI, adding to WebTorrent...', magnetURI);
+      
+      // Explicitly set these via JS for maximum peer compatibility
+      video.muted = true;
+      video.defaultMuted = true;
+      video.playsInline = true;
+      video.autoplay = true;
 
-      // Explicitly set these via JS for maximum peer compatibility, because React props can sometimes miss the timing
-      if (!isHost) {
-        video.muted = true;
-        video.defaultMuted = true;
-        video.playsInline = true;
-        video.autoplay = true;
-      }
-
-      // Monitor tracks
-      stream.getTracks().forEach(track => {
-        track.enabled = true; // force enable
-        console.log(`Track: ${track.kind} - ${track.label} (${track.readyState})`);
-        track.onunmute = () => {
-          console.log(`Track unmuted: ${track.kind} - ${track.label}`);
-          video.play().catch(e => console.warn('Play interrupted after unmute:', e.name));
-        };
+      const torrent = wt.add(magnetURI, (torrent) => {
+        console.log('WebTorrent ready, rendering to video element.');
+        const file = torrent.files.find(f => f.name.endsWith('.mp4') || f.name.endsWith('.webm') || f.name.endsWith('.mkv')) || torrent.files[0];
+        
+        if (file) {
+          file.renderTo(video, { autoplay: true });
+          
+          if (onStreamCreated) {
+            // we fake a stream created since we aren't using MediaStream anymore, just to trigger UI state
+            onStreamCreated(new MediaStream());
+          }
+        }
       });
 
-      // Some browsers need a slight nudge or unmuted state to start a MediaStream
-      video.srcObject = stream;
-      
-      // Force play explicitly just in case events don't fire
-      video.play().catch(e => console.warn('Direct play failed:', e));
-      
+      torrent.on('error', (err) => {
+        console.error('WebTorrent Error downloading:', err);
+      });
+
       const handleStreamReady = () => {
-        console.log('Stream ready event triggered. Video tracks:', stream.getVideoTracks().map(t => `${t.label} (${t.readyState})`));
         video.play().catch(err => {
-          console.warn('Initial stream playback failed (normal):', err.name);
+          console.warn('Initial playback failed (normal, blocked by browser):', err.name);
           setIsBlocked(true);
           if (!isHost && onPlaybackBlocked) onPlaybackBlocked();
         });
@@ -140,12 +136,14 @@ export default function CinemaPlayer({
 
       video.addEventListener('loadedmetadata', handleStreamReady);
       video.addEventListener('canplay', handleStreamReady);
+      
       return () => {
         video.removeEventListener('loadedmetadata', handleStreamReady);
         video.removeEventListener('canplay', handleStreamReady);
+        wt.remove(magnetURI);
       };
     }
-  }, [stream, isHost, onPlaybackBlocked]);
+  }, [magnetURI, isHost, onPlaybackBlocked]);
 
   // Sync state from host to peer
   useEffect(() => {

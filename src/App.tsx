@@ -11,6 +11,8 @@ interface ChatMessage {
   timestamp: number;
 }
 
+import { getTorrentClient } from './lib/torrent';
+
 export default function App() {
   const [p2p, setP2p] = useState<P2PManager | null>(null);
   const [peerId, setPeerId] = useState<string>('');
@@ -18,7 +20,8 @@ export default function App() {
   const [isHost, setIsHost] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [videoFile, setVideoFile] = useState<string | null>(null);
-  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+  const [magnetURI, setMagnetURI] = useState<string | null>(null);
+  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null); // Keep for compatibility if needed, but not primarily used
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [copied, setCopied] = useState(false);
@@ -190,6 +193,9 @@ export default function App() {
       } else if (msg.type === 'info') {
         if (msg.payload.type === 'peer-count' && !isHostRef.current) {
           setPeerCountOverride(msg.payload.count);
+        } else if (msg.payload.type === 'magnet' && !isHostRef.current) {
+          console.log('Received magnet URI:', msg.payload.magnetURI);
+          setMagnetURI(msg.payload.magnetURI);
         }
       } else if (msg.type === 'signal') {
         const payload = msg.payload;
@@ -215,6 +221,9 @@ export default function App() {
             // Re-send handshake to ensure everyone knows the host name
             manager.broadcast('handshake', { displayName: manager.displayName });
             manager.broadcast('info', { type: 'peer-count', count: next.length + 1 });
+            if (magnetURIRef.current) {
+              manager.broadcast('info', { type: 'magnet', magnetURI: magnetURIRef.current });
+            }
           }, 1000);
         }
         return next;
@@ -286,12 +295,31 @@ export default function App() {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
 
+  const magnetURIRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    magnetURIRef.current = magnetURI;
+  }, [magnetURI]);
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      // Local Object URL for the host to play instantly
       const url = URL.createObjectURL(file);
       setVideoFile(url);
       setIsHost(true);
+      
+      addSystemMessage('Seeding file via WebTorrent...');
+      const wt = getTorrentClient();
+      wt.seed(file, (torrent) => {
+        console.log('Client is seeding:', torrent.magnetURI);
+        setMagnetURI(torrent.magnetURI);
+        // If we already have peers, broadcast immediately
+        if (p2pRef.current) {
+          p2pRef.current.broadcast('info', { type: 'magnet', magnetURI: torrent.magnetURI });
+        }
+      });
+
       initP2P(); // Create room ID only when file is selected
     }
   };
@@ -562,6 +590,7 @@ export default function App() {
               <CinemaPlayer 
                 src={videoFile || undefined} 
                 stream={remoteStream || undefined}
+                magnetURI={magnetURI || undefined}
                 onStreamCreated={onStreamCreated}
                 onPlaybackBlocked={() => setStreamStatus('paused')}
                 onSync={onSync}
