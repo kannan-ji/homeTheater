@@ -244,13 +244,13 @@ export class P2PManager {
     });
   }
 
-  private forwardStream(stream: MediaStream) {
+  private forwardStream(stream: MediaStream, force: boolean = false) {
     const now = Date.now();
-    console.log('Forwarding stream to', this.children.size, 'children');
+    console.log(`Forwarding stream to ${this.children.size} children ${force ? '(FORCED)' : ''}`);
     this.children.forEach((peerId) => {
       // Throttle forwards to the same peer to avoid spamming calls
       const lastForward = this.forwardThrottles.get(peerId) || 0;
-      if (now - lastForward < 5000) { // 5 second cool-down per child
+      if (!force && now - lastForward < 5000) { // 5 second cool-down per child (skipped if forced)
         return;
       }
       this.forwardThrottles.set(peerId, now);
@@ -260,7 +260,7 @@ export class P2PManager {
 
   public setLocalStream(stream: MediaStream) {
     this.activeStream = stream;
-    this.forwardStream(stream);
+    this.forwardStream(stream, true); // Force allow manual refresh
   }
 
   public connect(remoteId: string) {

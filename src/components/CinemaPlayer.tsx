@@ -27,6 +27,14 @@ export default function CinemaPlayer({
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
   const [showControls, setShowControls] = useState(true);
+
+  // Sync volume and muted state to the video element
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.volume = volume;
+      videoRef.current.muted = isMuted;
+    }
+  }, [volume, isMuted]);
   const controlsTimeout = useRef<number | null>(null);
 
   useEffect(() => {

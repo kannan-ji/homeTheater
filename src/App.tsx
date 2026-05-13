@@ -429,7 +429,7 @@ export default function App() {
                   <span className="opacity-70">{isHost ? 'Seeding' : 'Connected'} as</span>
                   <span className="text-red-400 font-bold">{p2p.displayName}</span>
                 </div>
-                {isHost && file && (
+                {isHost && videoFile && (
                   <button 
                     onClick={refreshStream}
                     className="p-1 hover:bg-white/10 rounded-md transition-colors text-zinc-400 hover:text-white flex items-center gap-1"
