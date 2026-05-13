@@ -127,13 +127,14 @@ export class P2PManager {
         call.on('stream', (remoteStream) => {
           // If this is the same stream ID we already have, ignore
           if (this.activeStream && this.activeStream.id === remoteStream.id) {
+            console.log('Ignore redundant stream with same ID from ' + call.peer);
             return;
           }
 
-          console.log('Remote stream received from:', call.peer, 'Tracks:', remoteStream.getTracks().length);
+          console.log('Remote stream received from:', call.peer, 'ID:', remoteStream.id);
           this.activeStream = remoteStream;
           this.onStreamReceivedCallbacks.forEach(cb => cb(remoteStream));
-
+          
           // FORWARDING: Re-stream to my connected peers automatically
           this.forwardStream(remoteStream);
         });

@@ -77,6 +77,8 @@ export default function CinemaPlayer({
 
   useEffect(() => {
     if (videoRef.current && stream) {
+      if (videoRef.current.srcObject === stream) return;
+      
       console.log('Attaching stream to video element. Tracks:', stream.getTracks().length);
       videoRef.current.srcObject = stream;
       videoRef.current.play().catch(err => {

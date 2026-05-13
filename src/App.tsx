@@ -41,6 +41,7 @@ export default function App() {
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   const activeStreamRef = useRef<MediaStream | null>(null);
+  const remoteStreamRef = useRef<MediaStream | null>(null);
   const isHostRef = useRef(isHost);
   const p2pRef = useRef<P2PManager | null>(null);
   const isChatVisibleRef = useRef(isChatVisible);
@@ -242,7 +243,10 @@ export default function App() {
     });
 
     manager.onStreamReceived((stream) => {
-      console.log('Stream received!');
+      console.log('Stream received with ID:', stream.id);
+      if (remoteStreamRef.current?.id === stream.id) return;
+      
+      remoteStreamRef.current = stream;
       setRemoteStream(stream);
       setStreamStatus('live');
     });
