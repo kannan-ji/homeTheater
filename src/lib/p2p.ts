@@ -16,6 +16,8 @@ export class P2PManager {
   private onPeerJoinedCallbacks: ((peerId: string) => void)[] = [];
   private onPeerLeftCallbacks: ((peerId: string) => void)[] = [];
   private onStreamReceivedCallbacks: ((stream: MediaStream) => void)[] = [];
+  private onErrorCallbacks: ((error: any) => void)[] = [];
+  private onStatusChangeCallbacks: ((status: string) => void)[] = [];
 
   constructor(private peerId?: string) {
     this.init();
@@ -30,12 +32,19 @@ export class P2PManager {
           { urls: 'stun:stun2.l.google.com:19302' },
           { urls: 'stun:stun3.l.google.com:19302' },
           { urls: 'stun:stun4.l.google.com:19302' },
+          { urls: 'stun:stun.ekiga.net' },
+          { urls: 'stun:stun.ideasip.com' },
+          { urls: 'stun:stun.schlund.de' },
+          { urls: 'stun:stun.voipstunt.com' },
+          { urls: 'stun:stun.voxgratia.org' },
+          { urls: 'stun:stun.xten.com' },
         ],
       },
     });
 
     this.peer.on('open', (id) => {
       console.log('My peer ID is: ' + id);
+      this.onStatusChangeCallbacks.forEach(cb => cb('ready'));
     });
 
     this.peer.on('connection', (conn) => {
@@ -60,6 +69,7 @@ export class P2PManager {
 
     this.peer.on('error', (err) => {
       console.error('Peer error:', err);
+      this.onErrorCallbacks.forEach(cb => cb(err));
     });
   }
 
@@ -75,6 +85,7 @@ export class P2PManager {
 
     conn.on('error', (err) => {
       console.error('Connection error:', err);
+      this.onErrorCallbacks.forEach(cb => cb(err));
     });
 
     conn.on('close', () => {
@@ -120,6 +131,14 @@ export class P2PManager {
 
   public onStreamReceived(cb: (stream: MediaStream) => void) {
     this.onStreamReceivedCallbacks.push(cb);
+  }
+
+  public onError(cb: (error: any) => void) {
+    this.onErrorCallbacks.push(cb);
+  }
+
+  public onStatusChange(cb: (status: string) => void) {
+    this.onStatusChangeCallbacks.push(cb);
   }
 
   public destroy() {

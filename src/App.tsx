@@ -26,6 +26,8 @@ export default function App() {
   const [activePeers, setActivePeers] = useState<string[]>([]);
   const [peerCountOverride, setPeerCountOverride] = useState<number | null>(null);
   const [streamStatus, setStreamStatus] = useState<'idle' | 'capturing' | 'live' | 'error'>('idle');
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [isConnecting, setIsConnecting] = useState(false);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   const activeStreamRef = useRef<MediaStream | null>(null);
@@ -48,6 +50,9 @@ export default function App() {
   const initP2P = (roomToJoin?: string) => {
     if (p2pRef.current) return p2pRef.current;
 
+    setIsConnecting(true);
+    setConnectionError(null);
+
     const manager = new P2PManager();
     p2pRef.current = manager;
     setP2p(manager);
@@ -62,8 +67,26 @@ export default function App() {
           setIsConnected(true);
         }
         clearInterval(checkId);
+        setIsConnecting(false);
       }
     }, 500);
+
+    manager.onError((err) => {
+      console.error('App caught peer error:', err);
+      let errorMsg = 'Failed to connect.';
+      if (err.type === 'invalid-id' || err.type === 'unavailable-id') {
+        errorMsg = 'ID is already taken or unavailable.';
+      } else if (err.type === 'network') {
+        errorMsg = 'Network error. Please check your connection.';
+      } else if (err.type === 'peer-unavailable') {
+        errorMsg = 'Target room is not online.';
+      } else if (err.message) {
+        errorMsg = err.message;
+      }
+      setConnectionError(errorMsg);
+      setIsConnecting(false);
+      addSystemMessage(`Error: ${errorMsg}`);
+    });
 
     manager.onMessage((msg: P2PMessage) => {
       if (msg.type === 'chat') {
@@ -327,15 +350,37 @@ export default function App() {
                   type="text" 
                   placeholder="Paste Room ID here..." 
                   value={targetId}
-                  onChange={(e) => setTargetId(e.target.value)}
-                  className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 text-center focus:outline-none focus:ring-2 focus:ring-red-500/50 transition-all"
+                  onChange={(e) => {
+                    setTargetId(e.target.value);
+                    setConnectionError(null);
+                  }}
+                  className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 text-center focus:outline-none focus:ring-2 focus:ring-red-500/50 transition-all font-mono"
                 />
+                
+                <AnimatePresence>
+                  {connectionError && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      className="text-red-500 text-xs bg-red-500/10 py-2 rounded-lg border border-red-500/20"
+                    >
+                      {connectionError}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
                 <button 
                   onClick={handleConnect}
-                  disabled={!targetId}
-                  className="w-full py-4 px-6 bg-white text-black hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl font-bold transition-all active:scale-95"
+                  disabled={!targetId || isConnecting}
+                  className="w-full py-4 px-6 bg-white text-black hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl font-bold transition-all active:scale-95 flex items-center justify-center gap-2"
                 >
-                  Join Room
+                  {isConnecting ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full animate-spin" />
+                      Connecting...
+                    </>
+                  ) : 'Join Room'}
                 </button>
               </div>
             </motion.div>
