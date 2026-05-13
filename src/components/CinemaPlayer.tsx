@@ -25,8 +25,9 @@ export default function CinemaPlayer({
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [volume, setVolume] = useState(1);
-  const [isMuted, setIsMuted] = useState(false);
+  const [isMuted, setIsMuted] = useState(!isHost);
   const [showControls, setShowControls] = useState(true);
+  const [isBlocked, setIsBlocked] = useState(false);
 
   // Sync volume and muted state to the video element
   useEffect(() => {
@@ -98,8 +99,23 @@ export default function CinemaPlayer({
       const video = videoRef.current;
       console.log('Attaching stream to video element. ID:', stream.id, 'Tracks:', stream.getTracks().length);
       
+      // Crucial: clear standard src when attaching srcObject, else some browsers get confused
+      if (video.src) {
+        video.src = "";
+        video.removeAttribute('src');
+      }
+
+      // Explicitly set these via JS for maximum peer compatibility, because React props can sometimes miss the timing
+      if (!isHost) {
+        video.muted = true;
+        video.defaultMuted = true;
+        video.playsInline = true;
+        video.autoplay = true;
+      }
+
       // Monitor tracks
       stream.getTracks().forEach(track => {
+        track.enabled = true; // force enable
         console.log(`Track: ${track.kind} - ${track.label} (${track.readyState})`);
         track.onunmute = () => {
           console.log(`Track unmuted: ${track.kind} - ${track.label}`);
@@ -110,10 +126,14 @@ export default function CinemaPlayer({
       // Some browsers need a slight nudge or unmuted state to start a MediaStream
       video.srcObject = stream;
       
+      // Force play explicitly just in case events don't fire
+      video.play().catch(e => console.warn('Direct play failed:', e));
+      
       const handleStreamReady = () => {
         console.log('Stream ready event triggered. Video tracks:', stream.getVideoTracks().map(t => `${t.label} (${t.readyState})`));
         video.play().catch(err => {
           console.warn('Initial stream playback failed (normal):', err.name);
+          setIsBlocked(true);
           if (!isHost && onPlaybackBlocked) onPlaybackBlocked();
         });
       };
@@ -235,12 +255,40 @@ export default function CinemaPlayer({
         ref={videoRef}
         className="w-full h-full object-contain"
         onTimeUpdate={handleTimeUpdate}
-        onPlay={() => setIsPlaying(true)}
+        onPlay={() => {
+          setIsPlaying(true);
+          setIsBlocked(false);
+        }}
         onPause={() => setIsPlaying(false)}
         autoPlay={true}
-        muted={!isHost} // Peers usually want sound, but browsers sometimes block autoplay with sound
+        muted={isMuted} // Controlled by our explicit state
         playsInline
       />
+
+      <AnimatePresence>
+        {isBlocked && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-40 bg-black/80 flex flex-col items-center justify-center cursor-pointer"
+            onClick={() => {
+               if (videoRef.current) {
+                 videoRef.current.muted = true;
+                 setIsMuted(true);
+                 videoRef.current.play().catch(e => console.warn('Still blocked:', e));
+                 setIsBlocked(false);
+               } 
+            }}
+          >
+            <div className="w-20 h-20 bg-red-600 rounded-full flex items-center justify-center shadow-[0_0_40px_rgba(220,38,38,0.4)] mb-4">
+              <Play size={36} fill="currentColor" className="ml-2 text-white" />
+            </div>
+            <p className="text-white font-bold text-lg">Click to join stream</p>
+            <p className="text-gray-400 text-sm mt-2">Browser autoplay policy requires interaction</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {showControls && (
