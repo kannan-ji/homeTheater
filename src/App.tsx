@@ -116,6 +116,16 @@ export default function App() {
         if (msg.payload.type === 'peer-count' && !isHostRef.current) {
           setPeerCountOverride(msg.payload.count);
         }
+      } else if (msg.type === 'signal') {
+        if (msg.payload === 'ready-to-stream' && isHostRef.current) {
+          console.log('Peer signaled ready for stream:', msg.sender);
+          if (activeStreamRef.current) {
+            // Give it a tiny bit more time to stabilize
+            setTimeout(() => {
+              manager.call(msg.sender, activeStreamRef.current!);
+            }, 500);
+          }
+        }
       }
     });
 
@@ -135,12 +145,22 @@ export default function App() {
       });
       addSystemMessage(`User ${id.slice(0, 5)} joined the party!`);
 
-      // If I am the host and I have a stream, call this new peer immediately
-      if (isHostRef.current) {
+      // If I am NOT the host, I just joined someone. Let them know I'm ready for the stream.
+      if (!isHostRef.current) {
+        console.log('Joined host, signaling ready-to-stream');
+        setTimeout(() => {
+          manager.broadcast('signal', 'ready-to-stream');
+        }, 1500); // Wait for data connection to be absolutely solid
+      } else {
+        // I am the host. If a peer joined, I'll also try a direct call as fallback after a delay
+        // but prefer the explicit signal from the peer.
         if (activeStreamRef.current) {
-          console.log('Calling new peer with active stream:', id);
-          manager.call(id, activeStreamRef.current);
+          setTimeout(() => {
+            console.log('Host fallback call to:', id);
+            manager.call(id, activeStreamRef.current!);
+          }, 3000);
         }
+
         // Also send current sync state immediately
         const video = document.querySelector('video');
         if (video) {
@@ -149,7 +169,7 @@ export default function App() {
               currentTime: video.currentTime,
               paused: video.paused
             });
-          }, 1000); // Give connection a second to stabilize
+          }, 1000);
         }
       }
     });

@@ -1,6 +1,6 @@
 import { Peer, DataConnection, MediaConnection } from 'peerjs';
 
-export type MessageType = 'chat' | 'sync' | 'info';
+export type MessageType = 'chat' | 'sync' | 'info' | 'signal';
 
 export interface P2PMessage {
   type: MessageType;
@@ -53,15 +53,22 @@ export class P2PManager {
 
     this.peer.on('call', (call) => {
       console.log('Incoming call from:', call.peer);
-      // For receivers, answer the call with no stream (if they are only watching)
+      
+      // Safety check: close previous call from same peer if any
+      const existingCall = this.streamConnections.get(call.peer);
+      if (existingCall) {
+        console.log('Closing stale call from:', call.peer);
+        existingCall.close();
+      }
+
       call.answer();
       call.on('stream', (remoteStream) => {
-        console.log('Remote stream received from:', call.peer);
+        console.log('Remote stream received from:', call.peer, 'Tracks:', remoteStream.getTracks().length);
         this.onStreamReceivedCallbacks.forEach(cb => cb(remoteStream));
       });
       
       call.on('error', (err) => {
-        console.error('Call error:', err);
+        console.error('Call error from ' + call.peer + ':', err);
       });
 
       this.streamConnections.set(call.peer, call);
@@ -102,7 +109,21 @@ export class P2PManager {
 
   public call(remoteId: string, stream: MediaStream) {
     if (!this.peer) return;
+    
+    // Safety check: close previous call to same peer
+    const existingCall = this.streamConnections.get(remoteId);
+    if (existingCall) {
+      console.log('Closing existing call to:', remoteId);
+      existingCall.close();
+    }
+
+    console.log('Initiating call to:', remoteId);
     const call = this.peer.call(remoteId, stream);
+    
+    call.on('error', (err) => {
+      console.error('Call outgoing error to ' + remoteId + ':', err);
+    });
+
     this.streamConnections.set(remoteId, call);
   }
 
