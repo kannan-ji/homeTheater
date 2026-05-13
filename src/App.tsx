@@ -424,11 +424,10 @@ export default function App() {
 
           <div className="flex items-center gap-4">
             {p2p && (
-              <>
-                <div className="text-zinc-500 text-sm font-medium">
-                  {isHost ? 'Seeding' : 'Connected'} as <span className="text-red-400">{p2p.displayName}</span>
-                </div>
-              </>
+              <div className="text-zinc-500 text-[10px] sm:text-sm font-medium flex flex-col items-end sm:flex-row sm:items-center sm:gap-1.5 text-right">
+                <span className="opacity-70">{isHost ? 'Seeding' : 'Connected'} as</span>
+                <span className="text-red-400 font-bold">{p2p.displayName}</span>
+              </div>
             )}
           </div>
         </div>
