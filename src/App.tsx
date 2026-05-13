@@ -41,7 +41,7 @@ export default function App() {
   const addSystemMessage = (text: string) => {
     setChatMessages(prev => [...prev, {
       id: Math.random().toString(36).substr(2, 9),
-      sender: 'System',
+      sender: 'Broadcast',
       text,
       timestamp: Date.now()
     }]);
@@ -97,7 +97,7 @@ export default function App() {
 
         const message = {
           id: Math.random().toString(36).substr(2, 9),
-          sender: payloadData.originalSender.slice(0, 5),
+          sender: msg.senderName || manager.getPeerName(payloadData.originalSender),
           text: payloadData.text,
           timestamp: Date.now()
         };
@@ -143,7 +143,7 @@ export default function App() {
         }
         return next;
       });
-      addSystemMessage(`User ${id.slice(0, 5)} joined the party!`);
+      addSystemMessage(`User ${manager.getPeerName(id)} joined the party!`);
 
       // If I am NOT the host, I just joined someone. Let them know I'm ready for the stream.
       if (!isHostRef.current) {
@@ -182,7 +182,7 @@ export default function App() {
         }
         return next;
       });
-      addSystemMessage(`User ${id.slice(0, 5)} left the party.`);
+      addSystemMessage(`User ${manager.getPeerName(id)} left the party.`);
     });
 
     manager.onStreamReceived((stream) => {
@@ -245,6 +245,18 @@ export default function App() {
     }
   };
 
+  const leaveParty = () => {
+    localStorage.removeItem('lastTheaterId');
+    window.location.href = window.location.pathname; // Reload without search query
+  };
+
+  const refreshGuestStream = () => {
+    if (p2p && !isHost) {
+      addSystemMessage('Requesting stream refresh...');
+      p2p.broadcast('signal', 'ready-to-stream');
+    }
+  };
+
   const copyInviteLink = () => {
     const url = new URL(window.location.href);
     url.searchParams.set('room', peerId);
@@ -302,20 +314,24 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-4">
-            {peerId && (
-              <button 
-                onClick={copyInviteLink}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-900 border border-white/5 hover:border-white/10 transition-all text-sm font-medium"
-              >
-                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                <span className="text-zinc-400">ID:</span> {peerId.slice(0, 8)}...
-                {copied ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
-              </button>
+            {isConnected && (
+              <>
+                {isHost && peerId && (
+                  <button 
+                    onClick={copyInviteLink}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-900 border border-white/5 hover:border-white/10 transition-all text-sm font-medium"
+                  >
+                    <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                    <span className="text-zinc-400">ID:</span> {peerId.slice(0, 8)}...
+                    {copied ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
+                  </button>
+                )}
+                <div className="flex items-center gap-2 text-zinc-500 text-sm">
+                  <Users size={16} />
+                  <span>{peerCountOverride !== null ? peerCountOverride : (activePeers.length + (peerId ? 1 : 0))} Online</span>
+                </div>
+              </>
             )}
-            <div className="flex items-center gap-2 text-zinc-500 text-sm">
-              <Users size={16} />
-              <span>{peerCountOverride !== null ? peerCountOverride : (activePeers.length + (peerId ? 1 : 0))} Users</span>
-            </div>
           </div>
         </div>
       </header>
@@ -445,31 +461,39 @@ export default function App() {
                   </div>
                   <div className="text-zinc-500 text-sm flex items-center gap-2 mt-1">
                     <span>{isHost ? 'Your friends are watching your shared stream.' : 'Connected to host. Playback is synchronized.'}</span>
-                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-white/5 rounded-full text-xs font-medium text-zinc-400">
-                      <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
-                      {peerCountOverride !== null ? peerCountOverride : (activePeers.length + 1)} { (peerCountOverride !== null ? peerCountOverride : (activePeers.length + 1)) === 1 ? 'person' : 'people'} online
-                    </span>
+                    {isConnected && (
+                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-white/5 rounded-full text-xs font-medium text-zinc-400">
+                        <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+                        {peerCountOverride !== null ? peerCountOverride : (activePeers.length + 1)} { (peerCountOverride !== null ? peerCountOverride : (activePeers.length + 1)) === 1 ? 'person' : 'people'} online
+                      </span>
+                    )}
                   </div>
                 </div>
                 
                 <div className="flex gap-2">
-                  {!isHost && (
+                  {!isHost ? (
+                    <>
+                      <button 
+                        onClick={refreshGuestStream}
+                        className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-xl border border-white/5 transition-all text-sm font-medium"
+                      >
+                        Refresh Room
+                      </button>
+                      <button 
+                        onClick={leaveParty}
+                        className="px-4 py-2 bg-red-600/10 hover:bg-red-600/20 text-red-500 rounded-xl border border-red-500/20 transition-all text-sm font-medium"
+                      >
+                        Leave Room
+                      </button>
+                    </>
+                  ) : (
                     <button 
-                      onClick={() => {
-                        localStorage.removeItem('lastTheaterId');
-                        window.location.reload();
-                      }}
-                      className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-xl border border-white/5 transition-all text-sm font-medium"
+                      onClick={copyInviteLink}
+                      className="p-3 bg-black hover:bg-zinc-800 rounded-xl border border-white/5 transition-all group"
                     >
-                      Leave Party
+                      {copied ? <Check size={20} className="text-green-500" /> : <Share2 size={20} className="text-zinc-400 group-hover:text-white" />}
                     </button>
                   )}
-                  <button 
-                    onClick={copyInviteLink}
-                    className="p-3 bg-black hover:bg-zinc-800 rounded-xl border border-white/5 transition-all group"
-                  >
-                    {copied ? <Check size={20} className="text-green-500" /> : <Share2 size={20} className="text-zinc-400 group-hover:text-white" />}
-                  </button>
                 </div>
               </div>
             </div>

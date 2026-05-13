@@ -1,25 +1,39 @@
 import { Peer, DataConnection, MediaConnection } from 'peerjs';
 
-export type MessageType = 'chat' | 'sync' | 'info' | 'signal';
+export type MessageType = 'chat' | 'sync' | 'info' | 'signal' | 'handshake';
 
 export interface P2PMessage {
   type: MessageType;
   payload: any;
   sender: string;
+  senderName?: string;
+}
+
+const ADJECTIVES = ['Silent', 'Cool', 'Epic', 'Brave', 'Wild', 'Chill', 'Fast', 'Hyper', 'Neon', 'Lunar'];
+const NOUNS = ['Watcher', 'Cinephile', 'Viewer', 'Fan', 'Ghost', 'Rider', 'Pilot', 'Nomad', 'Star', 'Blade'];
+
+function generateRandomName() {
+  const adj = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];
+  const noun = NOUNS[Math.floor(Math.random() * NOUNS.length)];
+  const num = Math.floor(Math.random() * 9000) + 1000;
+  return `${adj}${noun}${num}`;
 }
 
 export class P2PManager {
   private peer: Peer | null = null;
   private connections: Map<string, DataConnection> = new Map();
   private streamConnections: Map<string, MediaConnection> = new Map();
+  private peerNames: Map<string, string> = new Map();
   private onMessageCallbacks: ((msg: P2PMessage) => void)[] = [];
   private onPeerJoinedCallbacks: ((peerId: string) => void)[] = [];
   private onPeerLeftCallbacks: ((peerId: string) => void)[] = [];
   private onStreamReceivedCallbacks: ((stream: MediaStream) => void)[] = [];
   private onErrorCallbacks: ((error: any) => void)[] = [];
   private onStatusChangeCallbacks: ((status: string) => void)[] = [];
+  public displayName: string;
 
   constructor(private peerId?: string) {
+    this.displayName = generateRandomName();
     this.init();
   }
 
@@ -83,11 +97,23 @@ export class P2PManager {
   private handleDataConnection(conn: DataConnection) {
     conn.on('open', () => {
       this.connections.set(conn.peer, conn);
+      // Send handshake immediately
+      conn.send({ 
+        type: 'handshake', 
+        payload: { displayName: this.displayName }, 
+        sender: this.peer?.id 
+      });
       this.onPeerJoinedCallbacks.forEach(cb => cb(conn.peer));
     });
 
     conn.on('data', (data: any) => {
-      this.onMessageCallbacks.forEach(cb => cb(data as P2PMessage));
+      const msg = data as P2PMessage;
+      if (msg.type === 'handshake') {
+        if (msg.payload.displayName) {
+          this.peerNames.set(msg.sender, msg.payload.displayName);
+        }
+      }
+      this.onMessageCallbacks.forEach(cb => cb(msg));
     });
 
     conn.on('error', (err) => {
@@ -128,10 +154,19 @@ export class P2PManager {
   }
 
   public broadcast(type: MessageType, payload: any) {
-    const msg: P2PMessage = { type, payload, sender: this.peer?.id || 'unknown' };
+    const msg: P2PMessage = { 
+      type, 
+      payload, 
+      sender: this.peer?.id || 'unknown',
+      senderName: this.displayName
+    };
     this.connections.forEach(conn => {
       conn.send(msg);
     });
+  }
+
+  public getPeerName(id: string): string {
+    return this.peerNames.get(id) || id.slice(0, 5);
   }
 
   public getMyId(): string | undefined {
