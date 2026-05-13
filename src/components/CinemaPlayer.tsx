@@ -7,8 +7,8 @@ interface CinemaPlayerProps {
   stream?: MediaStream;
   onStreamCreated?: (stream: MediaStream) => void;
   onPlaybackBlocked?: () => void;
-  onSync?: (state: { currentTime: number; paused: boolean }) => void;
-  syncState?: { currentTime: number; paused: boolean };
+  onSync?: (state: { currentTime: number; paused: boolean; duration: number }) => void;
+  syncState?: { currentTime: number; paused: boolean; duration: number };
   isHost?: boolean;
 }
 
@@ -129,27 +129,35 @@ export default function CinemaPlayer({
 
   // Sync state from host to peer
   useEffect(() => {
-    if (!isHost && syncState && videoRef.current && videoRef.current.readyState >= 1) {
+    if (!isHost && syncState && videoRef.current) {
       const video = videoRef.current;
       
-      // Smooth out time sync - avoid jumping for tiny differences
-      const timeDiff = Math.abs(video.currentTime - syncState.currentTime);
-      if (timeDiff > 1.5) {
-        console.log('Sync: Correcting time drift', timeDiff.toFixed(2), 's');
-        video.currentTime = syncState.currentTime;
+      const applySync = () => {
+        if (video.readyState >= 1) {
+          // Play/Pause sync
+          if (syncState.paused !== video.paused) {
+            if (syncState.paused) {
+              video.pause();
+            } else {
+              video.play().catch(() => {
+                if (onPlaybackBlocked) onPlaybackBlocked();
+              });
+            }
+          }
+        }
+      };
+
+      if (video.readyState >= 1) {
+        applySync();
+      } else {
+        video.addEventListener('loadedmetadata', applySync);
+        video.addEventListener('canplay', applySync);
       }
 
-      // Play/Pause sync
-      if (syncState.paused !== video.paused) {
-        if (syncState.paused) {
-          video.pause();
-        } else {
-          // If we are supposed to be playing but we're not, try to play
-          video.play().catch(() => {
-            if (onPlaybackBlocked) onPlaybackBlocked();
-          });
-        }
-      }
+      return () => {
+        video.removeEventListener('loadedmetadata', applySync);
+        video.removeEventListener('canplay', applySync);
+      };
     }
   }, [syncState, isHost, onPlaybackBlocked]);
 
@@ -185,7 +193,8 @@ export default function CinemaPlayer({
     if (isHost && onSync && videoRef.current) {
       onSync({
         currentTime: videoRef.current.currentTime,
-        paused: videoRef.current.paused
+        paused: videoRef.current.paused,
+        duration: videoRef.current.duration || 1
       });
     }
   };
@@ -228,8 +237,9 @@ export default function CinemaPlayer({
         onTimeUpdate={handleTimeUpdate}
         onPlay={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}
-        autoPlay={!isHost}
+        autoPlay={true}
         muted={!isHost} // Peers usually want sound, but browsers sometimes block autoplay with sound
+        playsInline
       />
 
       <AnimatePresence>
@@ -247,7 +257,7 @@ export default function CinemaPlayer({
                 min="0"
                 max="100"
                 step="0.1"
-                value={progress}
+                value={isHost ? progress : (syncState ? (syncState.currentTime / (syncState.duration || 1)) * 100 : 0)}
                 onChange={handleProgressChange}
                 disabled={!isHost}
                 className="w-full h-1 bg-white/20 rounded-lg appearance-none cursor-pointer accent-red-500 hover:h-2 transition-all"
@@ -283,7 +293,10 @@ export default function CinemaPlayer({
                 </div>
                 
                 <span className="text-white/60 text-sm font-mono">
-                  {videoRef.current ? formatTime(videoRef.current.currentTime) : '0:00'} / {videoRef.current ? formatTime(videoRef.current.duration) : '0:00'}
+                  {isHost 
+                    ? `${videoRef.current ? formatTime(videoRef.current.currentTime) : '0:00'} / ${videoRef.current ? formatTime(videoRef.current.duration) : '0:00'}`
+                    : `${syncState ? formatTime(syncState.currentTime) : '0:00'} / ${syncState ? formatTime(syncState.duration) : '0:00'}`
+                  }
                 </span>
               </div>
 

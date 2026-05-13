@@ -22,7 +22,7 @@ export default function App() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [copied, setCopied] = useState(false);
-  const [syncState, setSyncState] = useState<{ currentTime: number; paused: boolean }>({ currentTime: 0, paused: true });
+  const [syncState, setSyncState] = useState<{ currentTime: number; paused: boolean; duration: number }>({ currentTime: 0, paused: true, duration: 1 });
   const [activePeers, setActivePeers] = useState<string[]>([]);
   const [peerCountOverride, setPeerCountOverride] = useState<number | null>(null);
   const [streamStatus, setStreamStatus] = useState<'idle' | 'capturing' | 'live' | 'error'>('idle');
@@ -364,7 +364,8 @@ export default function App() {
         // Force a sync message as well
         onSync({
           currentTime: video.currentTime,
-          paused: video.paused
+          paused: video.paused,
+          duration: video.duration || 1
         });
       } else {
         setStreamStatus('error');
@@ -372,7 +373,7 @@ export default function App() {
     }
   };
 
-  const onSync = React.useCallback((state: { currentTime: number; paused: boolean }) => {
+  const onSync = React.useCallback((state: { currentTime: number; paused: boolean; duration: number }) => {
     if (p2pRef.current && isHostRef.current) {
       p2pRef.current.broadcast('sync', state);
     }

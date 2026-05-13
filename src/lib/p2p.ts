@@ -343,6 +343,13 @@ export class P2PManager {
   }
 
   public setLocalStream(stream: MediaStream) {
+    if (this.activeStream && this.activeStream.id !== stream.id) {
+      console.log('Stream changed! Closing old outgoing stream connections.');
+      this.streamConnections.forEach((call, peerId) => {
+        try { call.close(); } catch (e) {}
+      });
+      this.streamConnections.clear();
+    }
     this.activeStream = stream;
     this.forwardStream(stream, true); // Force allow manual refresh
   }
