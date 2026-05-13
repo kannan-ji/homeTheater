@@ -22,7 +22,17 @@ export class P2PManager {
   }
 
   private init() {
-    this.peer = new Peer(this.peerId);
+    this.peer = new Peer(this.peerId, {
+      config: {
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+          { urls: 'stun:stun2.l.google.com:19302' },
+          { urls: 'stun:stun3.l.google.com:19302' },
+          { urls: 'stun:stun4.l.google.com:19302' },
+        ],
+      },
+    });
 
     this.peer.on('open', (id) => {
       console.log('My peer ID is: ' + id);

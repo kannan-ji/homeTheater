@@ -33,7 +33,8 @@ export default function CinemaPlayer({
       // When the host starts playing a local file, capture the stream
       if (isHost && onStreamCreated) {
         const video = videoRef.current;
-        const handlePlay = () => {
+        
+        const tryCapture = () => {
           let capture: MediaStream | null = null;
           // @ts-ignore
           if (video.captureStream) {
@@ -44,12 +45,30 @@ export default function CinemaPlayer({
             capture = video.mozCaptureStream();
           }
           
-          if (capture) {
+          if (capture && capture.getVideoTracks().length > 0) {
+            console.log('Stream captured successfully');
             onStreamCreated(capture);
+            return true;
+          }
+          return false;
+        };
+
+        // Attempt capture on play or when metadata is loaded
+        const handleCapture = () => {
+          if (!tryCapture()) {
+            // If it failed (often because video hasn't actually started drawing), 
+            // retry once on the next frame or after a short delay
+            setTimeout(tryCapture, 500);
           }
         };
-        video.addEventListener('play', handlePlay);
-        return () => video.removeEventListener('play', handlePlay);
+
+        video.addEventListener('play', handleCapture);
+        video.addEventListener('loadedmetadata', handleCapture);
+        
+        return () => {
+          video.removeEventListener('play', handleCapture);
+          video.removeEventListener('loadedmetadata', handleCapture);
+        };
       }
     }
   }, [src, isHost, onStreamCreated]);

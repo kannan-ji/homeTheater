@@ -34,7 +34,10 @@ export default function App() {
   }, [isHost]);
 
   useEffect(() => {
-    const savedTargetId = localStorage.getItem('lastTheaterId');
+    // Check URL for join ID
+    const urlParams = new URLSearchParams(window.location.search);
+    const roomFromUrl = urlParams.get('room');
+    const savedTargetId = roomFromUrl || localStorage.getItem('lastTheaterId');
     if (savedTargetId) setTargetId(savedTargetId);
 
     const manager = new P2PManager();
@@ -44,6 +47,12 @@ export default function App() {
       const id = manager.getMyId();
       if (id) {
         setPeerId(id);
+        // If we have a target ID and it was from URL, try to connect automatically
+        if (roomFromUrl) {
+          manager.connect(roomFromUrl);
+          setIsHost(false);
+          setIsConnected(true);
+        }
         clearInterval(checkId);
       }
     }, 500);
@@ -59,17 +68,25 @@ export default function App() {
 
     manager.onMessage((msg: P2PMessage) => {
       if (msg.type === 'chat') {
+        const payloadData = typeof msg.payload === 'string' ? { text: msg.payload, originalSender: msg.sender } : msg.payload;
+        
+        // Skip if it's our own message being relayed back
+        if (payloadData.originalSender === manager.getMyId()) return;
+
         const message = {
           id: Math.random().toString(36).substr(2, 9),
-          sender: msg.sender.slice(0, 5),
-          text: msg.payload,
+          sender: payloadData.originalSender.slice(0, 5),
+          text: payloadData.text,
           timestamp: Date.now()
         };
         setChatMessages(prev => [...prev, message]);
         
         // Host relay: Send to everyone else
         if (isHostRef.current) {
-          manager.broadcast('chat', msg.payload);
+          manager.broadcast('chat', { 
+            text: payloadData.text, 
+            originalSender: payloadData.originalSender 
+          });
         }
       } else if (msg.type === 'sync') {
         setSyncState(msg.payload);
@@ -161,7 +178,8 @@ export default function App() {
 
   const handleSendMessage = () => {
     if (p2p && inputText.trim()) {
-      p2p.broadcast('chat', inputText);
+      const payload = { text: inputText, originalSender: peerId };
+      p2p.broadcast('chat', payload);
       setChatMessages(prev => [...prev, {
         id: Math.random().toString(36).substr(2, 9),
         sender: 'You',
@@ -172,8 +190,10 @@ export default function App() {
     }
   };
 
-  const copyId = () => {
-    navigator.clipboard.writeText(peerId);
+  const copyInviteLink = () => {
+    const url = new URL(window.location.href);
+    url.searchParams.set('room', peerId);
+    navigator.clipboard.writeText(url.toString());
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -208,7 +228,7 @@ export default function App() {
           <div className="flex items-center gap-4">
             {peerId && (
               <button 
-                onClick={copyId}
+                onClick={copyInviteLink}
                 className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-900 border border-white/5 hover:border-white/10 transition-all text-sm font-medium"
               >
                 <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
@@ -326,10 +346,10 @@ export default function App() {
                     </button>
                   )}
                   <button 
-                    onClick={copyId}
+                    onClick={copyInviteLink}
                     className="p-3 bg-black hover:bg-zinc-800 rounded-xl border border-white/5 transition-all group"
                   >
-                    <Share2 size={20} className="text-zinc-400 group-hover:text-white" />
+                    {copied ? <Check size={20} className="text-green-500" /> : <Share2 size={20} className="text-zinc-400 group-hover:text-white" />}
                   </button>
                 </div>
               </div>
