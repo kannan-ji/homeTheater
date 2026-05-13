@@ -394,18 +394,6 @@ export default function App() {
           <div className="flex items-center gap-4">
             {p2p && (
               <>
-                <div className="hidden sm:flex items-center gap-2 text-zinc-500 text-sm">
-                  <Users size={16} />
-                  <span>
-                    {(() => {
-                      const count = peerCountOverride !== null ? peerCountOverride : (activePeers.length + (peerId ? 1 : 0));
-                      if (count <= 1) return "you are online";
-                      if (count === 2) return "you and 1 other person are online";
-                      return `you and ${count - 1} other persons are online`;
-                    })()}
-                  </span>
-                </div>
-                <div className="hidden sm:block h-4 w-px bg-white/10" />
                 <div className="text-zinc-500 text-sm font-medium">
                   {isHost ? 'Hosting' : 'Watching'} as <span className="text-red-400">{p2p.displayName}</span>
                 </div>
@@ -540,7 +528,7 @@ export default function App() {
                         {(() => {
                           const count = peerCountOverride !== null ? peerCountOverride : (activePeers.length + 1);
                           if (count <= 1) return "you are online";
-                          if (count === 2) return "you and 1 other person are online";
+                          if (count === 2) return "you and 1 other person is online";
                           return `you and ${count - 1} other persons are online`;
                         })()}
                       </span>
