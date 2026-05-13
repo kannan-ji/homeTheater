@@ -34,6 +34,9 @@ export default function App() {
   }, [isHost]);
 
   useEffect(() => {
+    const savedTargetId = localStorage.getItem('lastTheaterId');
+    if (savedTargetId) setTargetId(savedTargetId);
+
     const manager = new P2PManager();
     setP2p(manager);
 
@@ -44,6 +47,15 @@ export default function App() {
         clearInterval(checkId);
       }
     }, 500);
+
+    const addSystemMessage = (text: string) => {
+      setChatMessages(prev => [...prev, {
+        id: Math.random().toString(36).substr(2, 9),
+        sender: 'System',
+        text,
+        timestamp: Date.now()
+      }]);
+    };
 
     manager.onMessage((msg: P2PMessage) => {
       if (msg.type === 'chat') {
@@ -70,6 +82,7 @@ export default function App() {
         if (prev.includes(id)) return prev;
         return [...prev, id];
       });
+      addSystemMessage(`User ${id.slice(0, 5)} joined the party!`);
 
       // If I am the host and I have a stream, call this new peer immediately
       if (isHostRef.current) {
@@ -80,16 +93,19 @@ export default function App() {
         // Also send current sync state immediately
         const video = document.querySelector('video');
         if (video) {
-          manager.broadcast('sync', {
-            currentTime: video.currentTime,
-            paused: video.paused
-          });
+          setTimeout(() => {
+            manager.broadcast('sync', {
+              currentTime: video.currentTime,
+              paused: video.paused
+            });
+          }, 1000); // Give connection a second to stabilize
         }
       }
     });
 
     manager.onPeerLeft((id) => {
       setActivePeers(prev => prev.filter(p => p !== id));
+      addSystemMessage(`User ${id.slice(0, 5)} left the party.`);
       if (activePeers.length <= 1) setIsConnected(false);
     });
 
@@ -119,6 +135,7 @@ export default function App() {
       p2p.connect(targetId);
       setIsHost(false);
       setIsConnected(true);
+      localStorage.setItem('lastTheaterId', targetId);
     }
   };
 
@@ -273,6 +290,17 @@ export default function App() {
                 </div>
                 
                 <div className="flex gap-2">
+                  {!isHost && (
+                    <button 
+                      onClick={() => {
+                        localStorage.removeItem('lastTheaterId');
+                        window.location.reload();
+                      }}
+                      className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-xl border border-white/5 transition-all text-sm font-medium"
+                    >
+                      Leave Party
+                    </button>
+                  )}
                   <button 
                     onClick={copyId}
                     className="p-3 bg-black hover:bg-zinc-800 rounded-xl border border-white/5 transition-all group"
