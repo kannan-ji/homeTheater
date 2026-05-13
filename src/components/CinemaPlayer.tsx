@@ -6,6 +6,7 @@ interface CinemaPlayerProps {
   src?: string;
   stream?: MediaStream;
   onStreamCreated?: (stream: MediaStream) => void;
+  onPlaybackBlocked?: () => void;
   onSync?: (state: { currentTime: number; paused: boolean }) => void;
   syncState?: { currentTime: number; paused: boolean };
   isHost?: boolean;
@@ -15,6 +16,7 @@ export default function CinemaPlayer({
   src, 
   stream, 
   onStreamCreated, 
+  onPlaybackBlocked,
   onSync,
   syncState,
   isHost 
@@ -79,9 +81,12 @@ export default function CinemaPlayer({
       videoRef.current.srcObject = stream;
       videoRef.current.play().catch(err => {
         console.log('Playback attempt failed (normal if no user interaction):', err);
+        if (!isHost && onPlaybackBlocked) {
+          onPlaybackBlocked();
+        }
       });
     }
-  }, [stream]);
+  }, [stream, isHost, onPlaybackBlocked]);
 
   // Sync state from host to peer
   useEffect(() => {
@@ -92,10 +97,14 @@ export default function CinemaPlayer({
       }
       if (syncState.paused !== videoRef.current.paused) {
         if (syncState.paused) videoRef.current.pause();
-        else videoRef.current.play();
+        else {
+          videoRef.current.play().catch(() => {
+            if (onPlaybackBlocked) onPlaybackBlocked();
+          });
+        }
       }
     }
-  }, [syncState, isHost]);
+  }, [syncState, isHost, onPlaybackBlocked]);
 
   const togglePlay = () => {
     if (!videoRef.current) return;

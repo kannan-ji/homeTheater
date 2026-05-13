@@ -31,6 +31,7 @@ export class P2PManager {
   private maxOutgoingStreams: number = 4; // Streaming Tree fan-out factor
   private seenMessages: Set<string> = new Set();
   private reconnectTimeout: any = null;
+  private forwardThrottles: Map<string, number> = new Map();
   private onMessageCallbacks: ((msg: P2PMessage) => void)[] = [];
   private onPeerJoinedCallbacks: ((peerId: string) => void)[] = [];
   private onPeerLeftCallbacks: ((peerId: string) => void)[] = [];
@@ -109,17 +110,26 @@ export class P2PManager {
 
       this.peer.on('call', (call) => {
         if (!call) return;
-        console.log('Incoming call from:', call.peer);
         
-        // Safety check: close previous call from same peer if any
+        // Safety check: if I already have an active call producing a stream from this peer, 
+        // maybe ignore the new call unless it's a different stream?
         const existingCall = this.streamConnections.get(call.peer);
-        if (existingCall) {
-          console.log('Closing stale call from:', call.peer);
-          existingCall.close();
+        if (existingCall && existingCall.open) {
+           console.log('Ignore incoming call from ' + call.peer + ' - already have one open');
+           // In some cases we might want to replace it, but let's try being conservative first
+           // to avoid the "interrupted by pause" error in the browser.
+           return; 
         }
 
+        console.log('Incoming call from:', call.peer);
         call.answer();
+        
         call.on('stream', (remoteStream) => {
+          // If this is the same stream ID we already have, ignore
+          if (this.activeStream && this.activeStream.id === remoteStream.id) {
+            return;
+          }
+
           console.log('Remote stream received from:', call.peer, 'Tracks:', remoteStream.getTracks().length);
           this.activeStream = remoteStream;
           this.onStreamReceivedCallbacks.forEach(cb => cb(remoteStream));
@@ -128,6 +138,12 @@ export class P2PManager {
           this.forwardStream(remoteStream);
         });
         
+        call.on('close', () => {
+          if (this.streamConnections.get(call.peer) === call) {
+            this.streamConnections.delete(call.peer);
+          }
+        });
+
         call.on('error', (err) => {
           console.error('Call error from ' + call.peer + ':', err);
         });
@@ -232,8 +248,15 @@ export class P2PManager {
   }
 
   private forwardStream(stream: MediaStream) {
+    const now = Date.now();
     console.log('Forwarding stream to', this.children.size, 'children');
     this.children.forEach((peerId) => {
+      // Throttle forwards to the same peer to avoid spamming calls
+      const lastForward = this.forwardThrottles.get(peerId) || 0;
+      if (now - lastForward < 5000) { // 5 second cool-down per child
+        return;
+      }
+      this.forwardThrottles.set(peerId, now);
       this.call(peerId, stream);
     });
   }
@@ -284,11 +307,11 @@ export class P2PManager {
       return;
     }
     
-    // Safety check: close previous call to same peer
+    // Safety check: If I already have an open call to this peer with the same stream, skip
     const existingCall = this.streamConnections.get(remoteId);
-    if (existingCall) {
-      console.log('Closing existing call to:', remoteId);
-      existingCall.close();
+    if (existingCall && existingCall.open) {
+      console.log('Already have an active call to:', remoteId);
+      return;
     }
 
     console.log('Initiating call to:', remoteId);

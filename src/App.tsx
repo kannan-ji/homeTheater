@@ -192,14 +192,6 @@ export default function App() {
           addSystemMessage('Room node reached capacity. Connecting to another peer in the swarm...');
           // Connect to the recommended target peer
           manager.connect(payload.targetPeerId);
-        } else if (payload === 'ready-to-stream' && isHostRef.current) {
-          console.log('Peer signaled ready for stream:', msg.sender);
-          if (activeStreamRef.current) {
-            // Give it a tiny bit more time to stabilize
-            setTimeout(() => {
-              manager.call(msg.sender, activeStreamRef.current!);
-            }, 500);
-          }
         }
       }
     });
@@ -222,23 +214,9 @@ export default function App() {
         return next;
       });
 
-      // If I am NOT the host, I just joined someone. Let them know I'm ready for the stream.
-      if (!isHostRef.current) {
-        console.log('Joined host, signaling ready-to-stream');
-        setTimeout(() => {
-          manager.broadcast('signal', 'ready-to-stream');
-        }, 1500); // Wait for data connection to be absolutely solid
-      } else {
-        // I am the host. If a peer joined, I'll also try a direct call as fallback after a delay
-        // but prefer the explicit signal from the peer.
-        if (activeStreamRef.current) {
-          setTimeout(() => {
-            console.log('Host fallback call to:', id);
-            manager.call(id, activeStreamRef.current!);
-          }, 3000);
-        }
-
-        // Also send current sync state immediately
+      // If I am the host, sync state immediately
+      if (isHostRef.current) {
+        // Current sync state
         const video = document.querySelector('video');
         if (video) {
           setTimeout(() => {
@@ -266,6 +244,7 @@ export default function App() {
     manager.onStreamReceived((stream) => {
       console.log('Stream received!');
       setRemoteStream(stream);
+      setStreamStatus('live');
     });
 
     return manager;
@@ -384,9 +363,43 @@ export default function App() {
     }
   };
 
+  const handleGuestPlay = () => {
+    const video = document.querySelector('video');
+    if (video) {
+      video.play().catch(err => console.error('Manual play failed:', err));
+      setStreamStatus('live');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#09090b] text-zinc-100 selection:bg-red-500/30 selection:text-red-200">
-      {/* Header */}
+      {/* Autoplay Overlay for Guests */}
+      <AnimatePresence>
+        {!isHost && isConnected && streamStatus === 'paused' && remoteStream && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-6"
+          >
+            <div className="bg-zinc-900 border border-white/10 p-8 rounded-3xl max-w-sm w-full text-center shadow-2xl">
+              <div className="w-16 h-16 bg-red-600 rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse">
+                <Play size={32} fill="currentColor" />
+              </div>
+              <h2 className="text-2xl font-bold mb-4">Stream Ready</h2>
+              <p className="text-zinc-400 mb-8 text-sm">
+                The cinema stream has started. Click the button below to join the theater.
+              </p>
+              <button 
+                onClick={handleGuestPlay}
+                className="w-full py-4 bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold transition-all shadow-xl shadow-red-600/20 active:scale-95"
+              >
+                Join Theater
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       <header className="border-b border-white/5 bg-black/40 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -515,6 +528,7 @@ export default function App() {
                 src={videoFile || undefined} 
                 stream={remoteStream || undefined}
                 onStreamCreated={onStreamCreated}
+                onPlaybackBlocked={() => setStreamStatus('paused')}
                 onSync={onSync}
                 syncState={syncState}
                 isHost={isHost}
