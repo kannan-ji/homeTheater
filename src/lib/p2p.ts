@@ -28,7 +28,7 @@ export class P2PManager {
   private streamConnections: Map<string, MediaConnection> = new Map();
   private peerNames: Map<string, string> = new Map();
   private activeStream: MediaStream | null = null;
-  private maxOutgoingStreams: number = 4; // Streaming Tree fan-out factor
+  private maxOutgoingStreams: number = 8; // Increased to prioritize direct host->peer (Star topology)
   private seenMessages: Set<string> = new Set();
   private reconnectTimeout: any = null;
   private forwardThrottles: Map<string, number> = new Map();
@@ -50,21 +50,10 @@ export class P2PManager {
       this.peer = new Peer(this.peerId, {
         config: {
           iceServers: [
-            // Open source / Community STUN servers
             { urls: 'stun:stun.l.google.com:19302' },
             { urls: 'stun:stun1.l.google.com:19302' },
             { urls: 'stun:stun2.l.google.com:19302' },
-            { urls: 'stun:stun3.l.google.com:19302' },
-            { urls: 'stun:stun4.l.google.com:19302' },
-            { urls: 'stun:stun.stunprotocol.org:3478' },
-            { urls: 'stun:stun.voxgratia.org' },
-            { urls: 'stun:stun.sipgate.net:10000' },
-            { urls: 'stun:stun.netgear.com:3478' },
-            { urls: 'stun:stun.t-online.de:3478' },
-            { urls: 'stun:stun.1und1.de:3478' },
-            
-            // TURN servers (Forwarding / Relay) - "Path B"
-            // These solve issues where symmetric NATs prevent direct connection.
+            { urls: 'stun:stun.services.mozilla.com' },
             {
               urls: [
                 'turn:openrelay.metered.ca:80',
@@ -203,8 +192,12 @@ export class P2PManager {
 
       // If I already have a stream, call the new peer (if it's a child)
       if (this.activeStream && isIncoming) {
-        console.log('New child connected, starting stream call to:', conn.peer);
-        this.call(conn.peer, this.activeStream);
+        setTimeout(() => {
+          if (this.activeStream && this.connections.has(conn.peer)) {
+            console.log('Handshake done, starting stream call to:', conn.peer);
+            this.call(conn.peer, this.activeStream);
+          }
+        }, 800); // 800ms delay to let ICE stabilize on DataConnection
       }
 
       this.onPeerJoinedCallbacks.forEach(cb => cb(conn.peer));

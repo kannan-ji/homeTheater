@@ -424,9 +424,21 @@ export default function App() {
 
           <div className="flex items-center gap-4">
             {p2p && (
-              <div className="text-zinc-500 text-[10px] sm:text-sm font-medium flex flex-col items-end sm:flex-row sm:items-center sm:gap-1.5 text-right">
-                <span className="opacity-70">{isHost ? 'Seeding' : 'Connected'} as</span>
-                <span className="text-red-400 font-bold">{p2p.displayName}</span>
+              <div className="text-zinc-500 text-[10px] sm:text-sm font-medium flex flex-col items-end sm:flex-row sm:items-center sm:gap-2 text-right">
+                <div className="flex items-center gap-1.5">
+                  <span className="opacity-70">{isHost ? 'Seeding' : 'Connected'} as</span>
+                  <span className="text-red-400 font-bold">{p2p.displayName}</span>
+                </div>
+                {isHost && file && (
+                  <button 
+                    onClick={refreshStream}
+                    className="p-1 hover:bg-white/10 rounded-md transition-colors text-zinc-400 hover:text-white flex items-center gap-1"
+                    title="Refresh stream for all peers"
+                  >
+                    <RefreshCcw size={12} />
+                    <span className="text-[9px] uppercase tracking-wider font-bold">Refresh Stream</span>
+                  </button>
+                )}
               </div>
             )}
           </div>

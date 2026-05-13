@@ -87,26 +87,34 @@ export default function CinemaPlayer({
     if (videoRef.current && stream) {
       if (videoRef.current.srcObject === stream) return;
       
-      console.log('Attaching stream to video element. ID:', stream.id);
-      videoRef.current.srcObject = stream;
+      const video = videoRef.current;
+      console.log('Attaching stream to video element. ID:', stream.id, 'Tracks:', stream.getTracks().length);
       
-      // Attempt autoplay (likely to fail if not interacted, handled by parent overlay)
-      videoRef.current.play().catch(err => {
-        console.warn('Initial stream autoplay blocked:', err.name);
-        if (!isHost && onPlaybackBlocked) {
-          onPlaybackBlocked();
-        }
-      });
+      // Some browsers need a slight nudge or unmuted state to start a MediaStream
+      video.srcObject = stream;
+      
+      const handleStreamReady = () => {
+        console.log('Stream ready to play. Video tracks:', stream.getVideoTracks().map(t => `${t.label} (${t.readyState})`));
+        video.play().catch(err => {
+          console.warn('Initial stream playback failed (normal):', err.name);
+          if (!isHost && onPlaybackBlocked) onPlaybackBlocked();
+        });
+      };
+
+      video.addEventListener('loadedmetadata', handleStreamReady);
+      return () => video.removeEventListener('loadedmetadata', handleStreamReady);
     }
   }, [stream, isHost, onPlaybackBlocked]);
 
   // Sync state from host to peer
   useEffect(() => {
-    if (!isHost && syncState && videoRef.current) {
+    if (!isHost && syncState && videoRef.current && videoRef.current.readyState >= 1) {
       const video = videoRef.current;
       
-      // Time sync
-      if (Math.abs(video.currentTime - syncState.currentTime) > 1.5) {
+      // Smooth out time sync - avoid jumping for tiny differences
+      const timeDiff = Math.abs(video.currentTime - syncState.currentTime);
+      if (timeDiff > 2.0) {
+        console.log('Sync: Correcting time drift', timeDiff.toFixed(2), 's');
         video.currentTime = syncState.currentTime;
       }
 
@@ -115,8 +123,8 @@ export default function CinemaPlayer({
         if (syncState.paused) {
           video.pause();
         } else {
+          // If we are supposed to be playing but we're not, try to play
           video.play().catch(() => {
-            // Only signal blocked if we're actually supposed to be playing
             if (onPlaybackBlocked) onPlaybackBlocked();
           });
         }
