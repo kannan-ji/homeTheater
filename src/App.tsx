@@ -30,43 +30,40 @@ export default function App() {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const activeStreamRef = useRef<MediaStream | null>(null);
   const isHostRef = useRef(isHost);
+  const p2pRef = useRef<P2PManager | null>(null);
 
   useEffect(() => {
     isHostRef.current = isHost;
   }, [isHost]);
 
-  useEffect(() => {
-    // Check URL for join ID
-    const urlParams = new URLSearchParams(window.location.search);
-    const roomFromUrl = urlParams.get('room');
-    const savedTargetId = roomFromUrl || localStorage.getItem('lastTheaterId');
-    if (savedTargetId) setTargetId(savedTargetId);
+  const addSystemMessage = (text: string) => {
+    setChatMessages(prev => [...prev, {
+      id: Math.random().toString(36).substr(2, 9),
+      sender: 'System',
+      text,
+      timestamp: Date.now()
+    }]);
+  };
+
+  const initP2P = (roomToJoin?: string) => {
+    if (p2pRef.current) return p2pRef.current;
 
     const manager = new P2PManager();
+    p2pRef.current = manager;
     setP2p(manager);
 
     const checkId = setInterval(() => {
       const id = manager.getMyId();
       if (id) {
         setPeerId(id);
-        // If we have a target ID and it was from URL, try to connect automatically
-        if (roomFromUrl) {
-          manager.connect(roomFromUrl);
+        if (roomToJoin) {
+          manager.connect(roomToJoin);
           setIsHost(false);
           setIsConnected(true);
         }
         clearInterval(checkId);
       }
     }, 500);
-
-    const addSystemMessage = (text: string) => {
-      setChatMessages(prev => [...prev, {
-        id: Math.random().toString(36).substr(2, 9),
-        sender: 'System',
-        text,
-        timestamp: Date.now()
-      }]);
-    };
 
     manager.onMessage((msg: P2PMessage) => {
       if (msg.type === 'chat') {
@@ -143,7 +140,6 @@ export default function App() {
         return next;
       });
       addSystemMessage(`User ${id.slice(0, 5)} left the party.`);
-      if (activePeers.length <= 1) setIsConnected(false);
     });
 
     manager.onStreamReceived((stream) => {
@@ -151,7 +147,22 @@ export default function App() {
       setRemoteStream(stream);
     });
 
-    return () => manager.destroy();
+    return manager;
+  };
+
+  useEffect(() => {
+    // Check URL for join ID
+    const urlParams = new URLSearchParams(window.location.search);
+    const roomFromUrl = urlParams.get('room');
+    const savedTargetId = roomFromUrl || localStorage.getItem('lastTheaterId');
+    if (savedTargetId) setTargetId(savedTargetId);
+
+    // If we have a room URL, initialize and join immediately
+    if (roomFromUrl) {
+      initP2P(roomFromUrl);
+    }
+
+    return () => p2pRef.current?.destroy();
   }, []);
 
   useEffect(() => {
@@ -164,12 +175,13 @@ export default function App() {
       const url = URL.createObjectURL(file);
       setVideoFile(url);
       setIsHost(true);
+      initP2P(); // Create room ID only when file is selected
     }
   };
 
   const handleConnect = () => {
-    if (p2p && targetId) {
-      p2p.connect(targetId);
+    if (targetId) {
+      initP2P(targetId);
       setIsHost(false);
       setIsConnected(true);
       localStorage.setItem('lastTheaterId', targetId);
