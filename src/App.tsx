@@ -393,9 +393,23 @@ export default function App() {
 
           <div className="flex items-center gap-4">
             {p2p && (
-              <div className="text-zinc-500 text-sm font-medium">
-                {isHost ? 'Hosting' : 'Watching'} as <span className="text-red-400">{p2p.displayName}</span>
-              </div>
+              <>
+                <div className="hidden sm:flex items-center gap-2 text-zinc-500 text-sm">
+                  <Users size={16} />
+                  <span>
+                    {(() => {
+                      const count = peerCountOverride !== null ? peerCountOverride : (activePeers.length + (peerId ? 1 : 0));
+                      if (count <= 1) return "you are online";
+                      if (count === 2) return "you and 1 other person are online";
+                      return `you and ${count - 1} other persons are online`;
+                    })()}
+                  </span>
+                </div>
+                <div className="hidden sm:block h-4 w-px bg-white/10" />
+                <div className="text-zinc-500 text-sm font-medium">
+                  {isHost ? 'Hosting' : 'Watching'} as <span className="text-red-400">{p2p.displayName}</span>
+                </div>
+              </>
             )}
           </div>
         </div>
@@ -523,7 +537,12 @@ export default function App() {
                     {isConnected && (
                       <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-white/5 rounded-full text-xs font-medium text-zinc-400 w-fit">
                         <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
-                        {peerCountOverride !== null ? peerCountOverride : (activePeers.length + 1)} { (peerCountOverride !== null ? peerCountOverride : (activePeers.length + 1)) === 1 ? 'person' : 'people'} online
+                        {(() => {
+                          const count = peerCountOverride !== null ? peerCountOverride : (activePeers.length + 1);
+                          if (count <= 1) return "you are online";
+                          if (count === 2) return "you and 1 other person are online";
+                          return `you and ${count - 1} other persons are online`;
+                        })()}
                       </span>
                     )}
                   </div>
