@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Users, Monitor, Link2, Copy, Check, MessageSquare, Send, Film, Share2 } from 'lucide-react';
+import { Play, Users, Monitor, Link2, Copy, Check, MessageSquare, Send, Film, Share2, RefreshCcw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import CinemaPlayer from './components/CinemaPlayer';
 import { P2PManager, P2PMessage } from './lib/p2p';
@@ -28,15 +28,34 @@ export default function App() {
   const [streamStatus, setStreamStatus] = useState<'idle' | 'capturing' | 'live' | 'error'>('idle');
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [isChatVisible, setIsChatVisible] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth < 1024 : false);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 1024);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   const activeStreamRef = useRef<MediaStream | null>(null);
   const isHostRef = useRef(isHost);
   const p2pRef = useRef<P2PManager | null>(null);
+  const isChatVisibleRef = useRef(isChatVisible);
+  const isMobileRef = useRef(isMobile);
 
   useEffect(() => {
     isHostRef.current = isHost;
   }, [isHost]);
+
+  useEffect(() => {
+    isChatVisibleRef.current = isChatVisible;
+  }, [isChatVisible]);
+
+  useEffect(() => {
+    isMobileRef.current = isMobile;
+  }, [isMobile]);
 
   const lastErrorRef = useRef<{ message: string; time: number } | null>(null);
 
@@ -138,6 +157,11 @@ export default function App() {
         };
         setChatMessages(prev => [...prev, message].slice(-100));
         
+        // Handle unread count for mobile floating chat
+        if (isMobileRef.current && !isChatVisibleRef.current) {
+          setUnreadCount(prev => prev + 1);
+        }
+
         // Host relay: Send to everyone else
         if (isHostRef.current) {
           manager.broadcast('chat', payloadData, msg.sender, msg.senderName);
@@ -342,6 +366,13 @@ export default function App() {
     }
   };
 
+  const toggleChat = () => {
+    setIsChatVisible(!isChatVisible);
+    if (!isChatVisible) {
+      setUnreadCount(0);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#09090b] text-zinc-100 selection:bg-red-500/30 selection:text-red-200">
       {/* Header */}
@@ -478,20 +509,14 @@ export default function App() {
                 isHost={isHost}
               />
               
-              <div className="p-6 bg-zinc-900/50 border border-white/5 rounded-2xl flex items-center justify-between">
-                <div>
-                  <div className="flex items-center gap-3">
+              <div className="p-6 bg-zinc-900/50 border border-white/5 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
+                <div className="w-full sm:w-auto">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
                     <h3 className="text-lg font-bold">
                       {isHost ? 'Hosting Local File' : 'Watching Live Stream'}
                     </h3>
                     {isHost && (
                       <div className="flex items-center gap-2">
-                        <button 
-                          onClick={refreshStream}
-                          className="px-2 py-0.5 text-[10px] uppercase tracking-wider font-bold bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white rounded border border-white/5 transition-all"
-                        >
-                          Refresh Stream
-                        </button>
                         <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] uppercase tracking-widest font-bold border border-white/5 ${
                           streamStatus === 'live' ? 'bg-green-500/10 text-green-500' : 
                           streamStatus === 'capturing' ? 'bg-yellow-500/10 text-yellow-500' :
@@ -504,10 +529,10 @@ export default function App() {
                       </div>
                     )}
                   </div>
-                  <div className="text-zinc-500 text-sm flex items-center gap-2 mt-1">
+                  <div className="text-zinc-500 text-sm flex flex-col sm:flex-row sm:items-center gap-2 mt-2 sm:mt-1">
                     <span>{isHost ? 'Your friends are watching your shared stream.' : 'Connected to host. Playback is synchronized.'}</span>
                     {isConnected && (
-                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-white/5 rounded-full text-xs font-medium text-zinc-400">
+                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-white/5 rounded-full text-xs font-medium text-zinc-400 w-fit">
                         <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
                         {peerCountOverride !== null ? peerCountOverride : (activePeers.length + 1)} { (peerCountOverride !== null ? peerCountOverride : (activePeers.length + 1)) === 1 ? 'person' : 'people'} online
                       </span>
@@ -515,7 +540,7 @@ export default function App() {
                   </div>
                 </div>
                 
-                <div className="flex gap-2">
+                <div className="flex gap-3 w-full sm:w-auto justify-end">
                   {!isHost ? (
                     <button 
                       onClick={leaveParty}
@@ -524,73 +549,126 @@ export default function App() {
                       Leave Room
                     </button>
                   ) : (
-                    <button 
-                      onClick={copyInviteLink}
-                      className="p-3 bg-black hover:bg-zinc-800 rounded-xl border border-white/5 transition-all group"
-                    >
-                      {copied ? <Check size={20} className="text-green-500" /> : <Share2 size={20} className="text-zinc-400 group-hover:text-white" />}
-                    </button>
+                    <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                      <button 
+                        onClick={copyInviteLink}
+                        className="flex items-center justify-center gap-2 px-4 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl transition-all shadow-lg shadow-red-600/20 text-sm font-bold w-full sm:w-auto bg-nowrap min-w-[180px]"
+                      >
+                        {copied ? <Check size={18} /> : <Share2 size={18} />}
+                        {copied ? 'Copied Invite Link!' : 'Share Room Link'}
+                      </button>
+                      <button 
+                        onClick={refreshStream}
+                        className="flex items-center justify-center gap-2 px-4 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white rounded-xl border border-white/5 transition-all text-sm font-medium w-full sm:w-auto min-w-[150px]"
+                      >
+                        <RefreshCcw size={16} className="text-zinc-400" />
+                        Refresh Stream
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
             </div>
 
             {/* Chat Section */}
-            <div className="flex flex-col h-[500px] lg:h-[600px] bg-zinc-900/50 border border-white/5 rounded-3xl overflow-hidden sticky top-24">
-              <div className="p-4 border-b border-white/5 bg-black/20 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <MessageSquare size={18} className="text-red-500" />
-                  <span className="font-bold text-sm">Live Chat</span>
-                </div>
-                {isConnected && (
-                  <div className="flex items-center gap-1.5 px-2 py-0.5 bg-green-500/10 rounded-full text-[10px] font-bold text-green-500 uppercase tracking-wider">
-                    <div className="w-1 h-1 bg-green-500 rounded-full animate-pulse" />
-                    Connected
-                  </div>
-                )}
-              </div>
-
-              <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                {chatMessages.length === 0 && (
-                  <div className="h-full flex items-center justify-center text-zinc-600 text-sm italic">
-                    No messages yet... say hi!
-                  </div>
-                )}
-                {chatMessages.map(msg => (
-                  <div key={msg.id} className="group">
-                    <div className="flex items-baseline gap-2 mb-1">
-                      <span className="font-bold text-xs text-red-400">{msg.sender}</span>
-                      <span className="text-[10px] text-zinc-600 font-mono">
-                        {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </span>
+            <AnimatePresence>
+              {(isChatVisible || !isMobile) && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 20, scale: 0.95 }}
+                  className={`
+                    flex flex-col bg-zinc-900/90 lg:bg-zinc-900/50 border border-white/10 lg:border-white/5 rounded-3xl overflow-hidden
+                    ${isChatVisible ? 'fixed inset-4 z-[60] h-auto lg:relative lg:inset-auto lg:h-[600px] lg:z-0' : 'hidden lg:flex h-[600px] sticky top-24'}
+                  `}
+                >
+                  <div className="p-4 border-b border-white/5 bg-black/20 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <MessageSquare size={18} className="text-red-500" />
+                      <span className="font-bold text-sm">Live Chat</span>
                     </div>
-                    <p className="text-sm text-zinc-300 leading-relaxed bg-black/20 p-2 rounded-lg border border-white/5 break-words overflow-hidden">
-                      {msg.text}
-                    </p>
+                    <div className="flex items-center gap-2">
+                      {isConnected && (
+                        <div className="flex items-center gap-1.5 px-2 py-0.5 bg-green-500/10 rounded-full text-[10px] font-bold text-green-500 uppercase tracking-wider">
+                          <div className="w-1 h-1 bg-green-500 rounded-full animate-pulse" />
+                          Connected
+                        </div>
+                      )}
+                      <button 
+                        onClick={() => setIsChatVisible(false)}
+                        className="lg:hidden p-1 hover:bg-white/10 rounded"
+                      >
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                      </button>
+                    </div>
                   </div>
-                ))}
-                <div ref={chatEndRef} />
-              </div>
 
-              <div className="p-4 bg-black/40 border-t border-white/5">
-                <div className="relative">
-                  <input 
-                    type="text" 
-                    placeholder="Type a message..."
-                    value={inputText}
-                    onChange={(e) => setInputText(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-                    className="w-full bg-zinc-900 border border-white/10 rounded-xl px-4 py-3 pr-12 focus:outline-none focus:ring-2 focus:ring-red-500/50 transition-all text-sm"
-                  />
-                  <button 
-                    onClick={handleSendMessage}
-                    className="absolute right-2 top-1.5 p-2 bg-red-600 rounded-lg hover:bg-red-500 transition-colors"
-                  >
-                    <Send size={16} />
-                  </button>
-                </div>
-              </div>
-            </div>
+                  <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                    {chatMessages.length === 0 && (
+                      <div className="h-full flex items-center justify-center text-zinc-600 text-sm italic">
+                        No messages yet... say hi!
+                      </div>
+                    )}
+                    {chatMessages.map(msg => (
+                      <div key={msg.id} className="group">
+                        <div className="flex items-baseline gap-2 mb-1">
+                          <span className="font-bold text-xs text-red-400">{msg.sender}</span>
+                          <span className="text-[10px] text-zinc-600 font-mono">
+                            {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                        <p className="text-sm text-zinc-300 leading-relaxed bg-black/20 p-2 rounded-lg border border-white/5 break-words overflow-hidden">
+                          {msg.text}
+                        </p>
+                      </div>
+                    ))}
+                    <div ref={chatEndRef} />
+                  </div>
+
+                  <div className="p-4 bg-black/40 border-t border-white/5">
+                    <div className="relative">
+                      <input 
+                        type="text" 
+                        placeholder="Type a message..."
+                        value={inputText}
+                        onChange={(e) => setInputText(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+                        className="w-full bg-zinc-900 border border-white/10 rounded-xl px-4 py-3 pr-12 focus:outline-none focus:ring-2 focus:ring-red-500/50 transition-all text-sm"
+                      />
+                      <button 
+                        onClick={handleSendMessage}
+                        className="absolute right-2 top-1.5 p-2 bg-red-600 rounded-lg hover:bg-red-500 transition-colors"
+                      >
+                        <Send size={16} />
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Mobile Chat Floating Button */}
+            {!isChatVisible && isConnected && (
+              <motion.button
+                initial={{ scale: 0, rotate: -20 }}
+                animate={{ scale: 1, rotate: 0 }}
+                onClick={toggleChat}
+                className="lg:hidden fixed bottom-6 right-6 z-50 w-14 h-14 bg-red-600 text-white rounded-full shadow-2xl shadow-red-600/40 flex items-center justify-center border border-white/10"
+              >
+                <MessageSquare size={24} />
+                <AnimatePresence>
+                  {unreadCount > 0 && (
+                    <motion.div 
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      className="absolute -top-1 -right-1 bg-white text-red-600 text-xs font-bold w-6 h-6 rounded-full border-2 border-red-600 flex items-center justify-center shadow-lg"
+                    >
+                      {unreadCount}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </motion.button>
+            )}
           </div>
         )}
       </main>
