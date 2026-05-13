@@ -23,9 +23,16 @@ homeTheater is a real-time, peer-to-peer (P2P) watch party application that allo
 2. Paste the ID into the "Join a Session" box and click **Join Room**.
 3. The video will start playing automatically when transmitted by the host.
 
-## Development
+## Deployment
 
-This app is built with a custom Express + Vite server to support server-side rendering and API proxying if needed.
+### GitHub Pages
+This repository includes a GitHub Action to deploy the app automatically.
+1. Push this code to a GitHub repository.
+2. Go to **Settings > Pages**.
+3. Under **Build and deployment > Source**, ensure it is set to **GitHub Actions**.
+4. The app will be available at `https://<username>.github.io/<repo-name>/`.
+
+**Note:** If you are deploying to a subfolder (standard for GitHub Pages), you may need to update the `base` property in `vite.config.ts` to match your repository name (e.g., `base: '/homeTheater/'`).
 
 ### Local Setup
 1. `npm install`
