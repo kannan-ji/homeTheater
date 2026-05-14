@@ -11,8 +11,6 @@ interface ChatMessage {
   timestamp: number;
 }
 
-import { getTorrentClient } from './lib/torrent';
-
 export default function App() {
   const [p2p, setP2p] = useState<P2PManager | null>(null);
   const [peerId, setPeerId] = useState<string>('');

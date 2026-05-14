@@ -39,56 +39,61 @@ export default function CinemaPlayer({
   const controlsTimeout = useRef<number | null>(null);
 
   useEffect(() => {
-    if (videoRef.current && src) {
-      // Very important: don't re-set src if it's already the same URL
-      // This prevents the video from restarting when the host component re-renders
+    if (!videoRef.current) return;
+
+    if (src) {
       const currentSrc = videoRef.current.src;
       if (currentSrc && (currentSrc.includes(src) || videoRef.current.currentSrc.includes(src))) {
-        // Skip re-setting src
+        // Skip
       } else {
         videoRef.current.src = src;
       }
-      
-      // When the host starts playing a local file, capture the stream
-      if (isHost && onStreamCreated) {
-        const video = videoRef.current;
-        
-        const tryCapture = () => {
-          let capture: MediaStream | null = null;
-          // @ts-ignore
-          if (video.captureStream) {
-            // @ts-ignore
-            capture = video.captureStream(30); // 30fps hint
-          } else if (video.mozCaptureStream) {
-            // @ts-ignore
-            capture = video.mozCaptureStream(30);
-          }
-          
-          if (capture && capture.getVideoTracks().length > 0) {
-            console.log('Stream captured successfully');
-            onStreamCreated(capture);
-            return true;
-          }
-          return false;
-        };
-
-        // Attempt capture on play or when metadata is loaded
-        const handleCapture = () => {
-          if (!tryCapture()) {
-            // If it failed (often because video hasn't actually started drawing), 
-            // retry once on the next frame or after a short delay
-            setTimeout(tryCapture, 500);
-          }
-        };
-
-        video.addEventListener('play', handleCapture);
-        video.addEventListener('loadedmetadata', handleCapture);
-        
-        return () => {
-          video.removeEventListener('play', handleCapture);
-          video.removeEventListener('loadedmetadata', handleCapture);
-        };
+    } else if (stream) {
+      if (videoRef.current.srcObject !== stream) {
+        videoRef.current.srcObject = stream;
       }
+    } else {
+      videoRef.current.srcObject = null;
+    }
+  }, [src, stream]);
+
+  // Host stream capture
+  useEffect(() => {
+    if (videoRef.current && src && isHost && onStreamCreated) {
+      const video = videoRef.current;
+      
+      const tryCapture = () => {
+        let capture: MediaStream | null = null;
+        // @ts-ignore
+        if (video.captureStream) {
+          // @ts-ignore
+          capture = video.captureStream(30);
+        } else if (video.mozCaptureStream) {
+          // @ts-ignore
+          capture = video.mozCaptureStream(30);
+        }
+        
+        if (capture && capture.getVideoTracks().length > 0) {
+          console.log('Stream captured successfully');
+          onStreamCreated(capture);
+          return true;
+        }
+        return false;
+      };
+
+      const handleCapture = () => {
+        if (!tryCapture()) {
+          setTimeout(tryCapture, 500);
+        }
+      };
+
+      video.addEventListener('play', handleCapture);
+      video.addEventListener('loadedmetadata', handleCapture);
+      
+      return () => {
+        video.removeEventListener('play', handleCapture);
+        video.removeEventListener('loadedmetadata', handleCapture);
+      };
     }
   }, [src, isHost, onStreamCreated]);
 
