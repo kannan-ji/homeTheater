@@ -240,6 +240,7 @@ export default function CinemaPlayer({
         className="w-full h-full object-contain"
         onTimeUpdate={handleTimeUpdate}
         onPlay={() => {
+          console.log('CinemaPlayer: Play event fired');
           setIsPlaying(true);
           setIsBlocked(false);
         }}
