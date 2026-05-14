@@ -51,6 +51,11 @@ export default function CinemaPlayer({
     } else if (stream) {
       if (videoRef.current.srcObject !== stream) {
         videoRef.current.srcObject = stream;
+        videoRef.current.play().catch(e => {
+          console.warn('Playback blocked:', e);
+          setIsBlocked(true);
+          if (onPlaybackBlocked) onPlaybackBlocked();
+        });
       }
     } else {
       videoRef.current.srcObject = null;
@@ -210,7 +215,7 @@ export default function CinemaPlayer({
           setIsBlocked(false);
         }}
         onPause={() => setIsPlaying(false)}
-        autoPlay={true}
+        autoPlay={!isHost}
         muted={isMuted} // Controlled by our explicit state
         playsInline
       />
