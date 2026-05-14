@@ -32,6 +32,7 @@ export default function CinemaPlayer({
   // Sync volume and muted state to the video element
   useEffect(() => {
     if (videoRef.current) {
+      console.log(`CinemaPlayer: Syncing video element properties: volume=${volume}, muted=${isMuted}`);
       videoRef.current.volume = volume;
       videoRef.current.muted = isMuted;
     }
@@ -52,16 +53,20 @@ export default function CinemaPlayer({
     } else if (stream) {
       if (videoRef.current.srcObject !== stream) {
         console.log('CinemaPlayer: Applying new stream to video element', stream.id);
+        
+        // Force re-attach
+        videoRef.current.srcObject = null;
         videoRef.current.srcObject = stream;
-        videoRef.current.muted = !isHost;
         
         // Ensure tracks are enabled
         stream.getTracks().forEach(track => {
           if (!track.enabled) {
-            console.log(`CinemaPlayer: Enabling disabled track: ${track.kind}`);
+            console.log(`CinemaPlayer: Enabling track: ${track.kind} (${track.id})`);
             track.enabled = true;
           }
         });
+        
+        console.log(`CinemaPlayer: Stream attached. Video tracks: ${stream.getVideoTracks().length}, Audio tracks: ${stream.getAudioTracks().length}`);
 
         // Trigger play
         videoRef.current.play().then(() => {
