@@ -114,7 +114,10 @@ export default function App() {
         if (roomToJoin) {
           manager.connect(roomToJoin);
           setIsHost(false);
-          setIsConnected(true);
+          setIsConnected(false); // Joinee is NOT connected yet
+        } else {
+          setIsHost(true);
+          setIsConnected(true); // Host is connected immediately
         }
         clearInterval(checkId);
         setIsConnecting(false);
@@ -180,6 +183,7 @@ export default function App() {
           
           if (!isHostRef.current && msg.sender === theaterToJoin) {
             setHostName(msg.payload.displayName);
+            setIsConnected(true);
             addSystemMessage(`You have joined ${msg.payload.displayName}'s theater!`);
           } else {
             addSystemMessage(`${msg.payload.displayName} joined the theater`);
@@ -203,7 +207,6 @@ export default function App() {
     });
 
     manager.onPeerJoined((id) => {
-      setIsConnected(true);
       setConnectionError(null);
       setActivePeers(prev => {
         if (prev.includes(id)) return prev;
@@ -668,7 +671,12 @@ export default function App() {
                       {chatMessages.map(msg => (
                         <div key={msg.id} className="group">
                           <div className="flex items-baseline gap-2 mb-1">
-                            <span className="font-bold text-xs text-red-400">{msg.sender}</span>
+                            <span className="font-bold text-xs text-red-400 flex items-center gap-2">
+                              {msg.sender}
+                              {((msg.sender === 'You' && isHost) || (hostName && msg.sender === hostName)) && (
+                                <span className="text-[8px] bg-red-600/20 text-red-500 border border-red-500/20 px-1 rounded-sm uppercase font-bold">Host</span>
+                              )}
+                            </span>
                             <span className="text-[10px] text-zinc-600 font-mono">
                               {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </span>
