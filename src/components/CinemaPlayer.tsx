@@ -46,23 +46,41 @@ export default function CinemaPlayer({
       if (currentSrc && (currentSrc.includes(src) || videoRef.current.currentSrc.includes(src))) {
         // Skip
       } else {
+        console.log('CinemaPlayer: Setting video src', src);
         videoRef.current.src = src;
       }
     } else if (stream) {
       if (videoRef.current.srcObject !== stream) {
+        console.log('CinemaPlayer: Applying new stream to video element', stream.id);
         videoRef.current.srcObject = stream;
-        videoRef.current.play().catch(e => {
-          // It's expected for browsers to block autoplay before user interaction.
-          // We handle this by setting isBlocked = true and showing an overlay.
+        
+        // Ensure tracks are enabled
+        stream.getTracks().forEach(track => {
+          if (!track.enabled) {
+            console.log(`CinemaPlayer: Enabling disabled track: ${track.kind}`);
+            track.enabled = true;
+          }
+        });
+
+        // Trigger play
+        videoRef.current.play().then(() => {
+          console.log('CinemaPlayer: Playback started automatically');
+          setIsBlocked(false);
+        }).catch(e => {
           if (e.name !== 'NotAllowedError') {
-            console.warn('Playback error:', e);
+            console.warn('CinemaPlayer: Playback failed:', e);
+          } else {
+            console.log('CinemaPlayer: Autoplay blocked, showing overlay');
           }
           setIsBlocked(true);
           if (onPlaybackBlocked) onPlaybackBlocked();
         });
       }
     } else {
-      videoRef.current.srcObject = null;
+      if (videoRef.current.srcObject) {
+        console.log('CinemaPlayer: Clearing srcObject');
+        videoRef.current.srcObject = null;
+      }
     }
   }, [src, stream]);
 
@@ -120,7 +138,9 @@ export default function CinemaPlayer({
             } else {
               video.play().catch((e) => {
                 if (e.name !== 'NotAllowedError') {
-                  console.warn('Sync play error:', e);
+                  console.warn('CinemaPlayer: Sync play error:', e);
+                } else {
+                  console.log('CinemaPlayer: Sync play blocked by autoplay policy');
                 }
                 setIsBlocked(true);
                 if (onPlaybackBlocked) onPlaybackBlocked();

@@ -166,7 +166,10 @@ export class P2PManager {
             return;
           }
 
-          console.log('New remote stream received from:', call.peer, 'ID:', remoteStream.id);
+          console.log(`New remote stream received from: ${call.peer}, ID: ${remoteStream.id}, Tracks: ${remoteStream.getTracks().length}`);
+          remoteStream.getTracks().forEach(track => {
+            console.log(`Track: ${track.kind}, ID: ${track.id}, Enabled: ${track.enabled}, ReadyState: ${track.readyState}`);
+          });
           this.activeStream = remoteStream;
           this.onStreamReceivedCallbacks.forEach(cb => cb(remoteStream));
           

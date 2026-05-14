@@ -137,7 +137,7 @@ export default function App() {
       } else if (err.type === 'network') {
         errorMsg = 'Network error. Please check your connection.';
       } else if (err.type === 'peer-unavailable') {
-        errorMsg = 'Target room is not online.';
+        errorMsg = 'Target theater is not online.';
       } else if (err.message) {
         errorMsg = err.message;
       }
@@ -176,13 +176,13 @@ export default function App() {
           greetedPeers.current.add(msg.sender);
 
           const urlParams = new URL(window.location.href).searchParams;
-          const roomToJoin = urlParams.get('room') || targetId;
+          const theaterToJoin = urlParams.get('theater') || urlParams.get('room') || targetId;
           
-          if (!isHostRef.current && msg.sender === roomToJoin) {
+          if (!isHostRef.current && msg.sender === theaterToJoin) {
             setHostName(msg.payload.displayName);
-            addSystemMessage(`You have joined ${msg.payload.displayName}'s swarm!`);
+            addSystemMessage(`You have joined ${msg.payload.displayName}'s theater!`);
           } else {
-            addSystemMessage(`${msg.payload.displayName} joined the swarm`);
+            addSystemMessage(`${msg.payload.displayName} joined the theater`);
           }
         }
       } else if (msg.type === 'sync') {
@@ -195,7 +195,7 @@ export default function App() {
         const payload = msg.payload;
         if (payload?.action === 'redirect') {
           console.log('Redirecting to peer:', payload.targetPeerId);
-          addSystemMessage('Room node reached capacity. Connecting to another peer in the swarm...');
+          addSystemMessage('Theater node reached capacity. Connecting to another peer...');
           // Connect to the recommended target peer
           manager.connect(payload.targetPeerId);
         }
@@ -253,7 +253,7 @@ export default function App() {
       const existingTrackIds = remoteStreamRef.current?.getTracks().map(t => t.id).sort().join(',');
       
       if (remoteStreamRef.current?.id === stream.id || trackIds === existingTrackIds) {
-        console.log('App ignored redundant stream notification');
+        console.log(`App ignored redundant stream: ID match=${remoteStreamRef.current?.id === stream.id}, Tracks match=${trackIds === existingTrackIds}`);
         return;
       }
       
@@ -270,13 +270,13 @@ export default function App() {
   useEffect(() => {
     // Check URL for join ID
     const urlParams = new URLSearchParams(window.location.search);
-    const roomFromUrl = urlParams.get('room');
-    const savedTargetId = roomFromUrl || localStorage.getItem('lastTheaterId');
-    if (savedTargetId) setTargetId(savedTargetId);
+    const theaterFromUrl = urlParams.get('theater') || urlParams.get('room');
+    const savedTheaterId = theaterFromUrl || localStorage.getItem('lastTheaterId');
+    if (savedTheaterId) setTargetId(savedTheaterId);
 
-    // If we have a room URL, initialize and join immediately
-    if (roomFromUrl) {
-      initP2P(roomFromUrl);
+    // If we have a theater URL, initialize and join immediately
+    if (theaterFromUrl) {
+      initP2P(theaterFromUrl);
     }
 
     return () => p2pRef.current?.destroy();
@@ -335,7 +335,7 @@ export default function App() {
 
   const copyInviteLink = () => {
     const url = new URL(window.location.href);
-    url.searchParams.set('room', peerId);
+    url.searchParams.set('theater', peerId);
     navigator.clipboard.writeText(url.toString());
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -464,19 +464,19 @@ export default function App() {
               </div>
               <h2 className="text-2xl font-bold mb-2">Join a Theater</h2>
               <p className="text-zinc-400 mb-8 max-w-[280px]">
-                Already have a Theater ID? Paste it below to join your friend's cinema room.
+                Already have a Theater ID? Paste it below to join your friend's theater session.
               </p>
               
               <div className="w-full space-y-4">
                 <input 
                   type="text" 
-                  placeholder="Paste Room ID here..." 
+                  placeholder="Paste Theater ID here..." 
                   value={targetId}
                   onChange={(e) => {
                     setTargetId(e.target.value);
                     setConnectionError(null);
                   }}
-                  className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 text-center focus:outline-none focus:ring-2 focus:ring-red-500/50 transition-all font-mono"
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-center focus:outline-none focus:ring-2 focus:ring-red-500/40 focus:border-red-500/40 transition-all font-mono text-lg tracking-wider placeholder:text-zinc-600 hover:border-white/20"
                 />
                 
                 <AnimatePresence>
@@ -494,8 +494,8 @@ export default function App() {
                         onClick={() => {
                           if (p2pRef.current) p2pRef.current.destroy();
                           const urlParams = new URL(window.location.href);
-                          const room = urlParams.searchParams.get('room');
-                          if (room) initP2P(room);
+                          const theater = urlParams.searchParams.get('theater') || urlParams.searchParams.get('room');
+                          if (theater) initP2P(theater);
                           else if (targetId) initP2P(targetId);
                         }}
                         className="text-xs text-zinc-400 hover:text-white flex items-center justify-center gap-2 mx-auto transition-colors"
@@ -570,14 +570,23 @@ export default function App() {
                   </div>
                 </div>
                 
-                <div className="flex gap-3 w-full sm:w-auto justify-end">
+              <div className="flex gap-3 w-full sm:w-auto justify-end">
                   {!isHost ? (
-                    <button 
-                      onClick={leaveParty}
-                      className="px-4 py-2 bg-red-600/10 hover:bg-red-600/20 text-red-500 rounded-xl border border-red-500/20 transition-all text-sm font-medium"
-                    >
-                      Leave Theater
-                    </button>
+                    <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                      <button 
+                        onClick={refreshGuestStream}
+                        className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-white rounded-xl border border-white/5 transition-all text-sm font-medium flex items-center justify-center gap-2"
+                      >
+                        <RefreshCcw size={16} className="text-zinc-400" />
+                        Refresh Stream
+                      </button>
+                      <button 
+                        onClick={leaveParty}
+                        className="px-4 py-2 bg-red-600/10 hover:bg-red-600/20 text-red-500 rounded-xl border border-red-500/20 transition-all text-sm font-medium"
+                      >
+                        Leave Theater
+                      </button>
+                    </div>
                   ) : (
                     <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                       <button 
