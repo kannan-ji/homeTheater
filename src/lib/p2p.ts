@@ -26,6 +26,7 @@ export class P2PManager {
   private children: Set<string> = new Set();
   private parentPeerId: string | null = null;
   private streamConnections: Map<string, MediaConnection> = new Map();
+  private connectionRequestTimes: Map<string, number> = new Map();
   private peerNames: Map<string, string> = new Map();
   private activeStream: MediaStream | null = null;
   private maxOutgoingStreams: number = 8;
@@ -74,8 +75,21 @@ export class P2PManager {
   private startHeartbeat() {
     this.heartbeatInterval = setInterval(() => {
       if (this.peer && !this.peer.destroyed) {
+        // Forced Re-initialization Check
+        const now = Date.now();
+        let stalled = false;
+        this.connectionRequestTimes.forEach((startTime, peerId) => {
+          if (now - startTime > 5000 && !this.streamConnections.has(peerId)) {
+            console.error(`Connection stalled for peer ${peerId} ( > 5s ). Forcing Peer node re-init.`);
+            stalled = true;
+          }
+        });
+        if (stalled) {
+          this.reInitializePeer();
+          return;
+        }
+
         if (this.connections.size > 0) {
-          const now = Date.now();
           this.broadcast('signal', { action: 'heartbeat', timestamp: now });
           // Also ping individually for latency tracking
           this.connections.forEach(conn => {
@@ -91,8 +105,26 @@ export class P2PManager {
     }, 10000); 
   }
 
+  private reInitializePeer() {
+    console.log('Forced re-initialization of PeerJS node.');
+    this.destroy(); // Destroy old
+    this.init(); // Init new
+  }
+
+  private hardCloseCall(call: MediaConnection) {
+    console.log(`Aggressive closing of call to: ${call.peer}`);
+    try {
+      // Remove all local listeners first
+      (call as any).removeAllListeners && (call as any).removeAllListeners();
+      call.close();
+    } catch (e) {
+      console.error(`Error during hard close of call to ${call.peer}`, e);
+    }
+  }
+
   private init() {
     try {
+      console.log('Initializing PeerJS node...');
       this.peer = new Peer(this.peerId, {
         config: {
           iceServers: [
@@ -109,7 +141,7 @@ export class P2PManager {
           iceTransportPolicy: 'all',
           iceCandidatePoolSize: 10,
         },
-        debug: 1 // Only errors
+        debug: 3
       });
 
       if (!this.peer) {
@@ -133,7 +165,7 @@ export class P2PManager {
               console.error('Reconnect failed:', e);
             }
           }
-        }, 2000 + Math.random() * 3000); // jittered 2-5s delay
+        }, 2000 + Math.random() * 3000);
       });
 
       this.peer.on('connection', (conn) => {
@@ -148,7 +180,7 @@ export class P2PManager {
         const existingCall = this.streamConnections.get(call.peer);
         if (existingCall) {
            console.log('Closing existing call from ' + call.peer + ' to accept new one.');
-           try { existingCall.close(); } catch (e) {}
+           this.hardCloseCall(existingCall);
            this.streamConnections.delete(call.peer);
         }
 
@@ -156,18 +188,10 @@ export class P2PManager {
         call.answer();
         
         call.on('stream', (remoteStream) => {
-          // Track fingerprinting: track IDs are consistent even if the stream wrapper changes
-          const trackIds = remoteStream.getTracks().map(t => t.id).sort().join(',');
-          const existingTrackIds = this.activeStream?.getTracks().map(t => t.id).sort().join(',');
-          
-          if (this.activeStream && (this.activeStream.id === remoteStream.id || trackIds === existingTrackIds)) {
-            console.log('Ignore redundant stream from ' + call.peer);
-            return;
-          }
-
-          console.log(`New remote stream received from: ${call.peer}, ID: ${remoteStream.id}, Tracks: ${remoteStream.getTracks().length}`);
+          this.connectionRequestTimes.delete(call.peer);
+          console.log(`Stream received from: ${call.peer}, ID: ${remoteStream.id}`);
           remoteStream.getTracks().forEach(track => {
-            console.log(`Track: ${track.kind}, ID: ${track.id}, Enabled: ${track.enabled}, ReadyState: ${track.readyState}`);
+            console.log(`Track: ${track.kind}, ID: ${track.id}, Enabled: ${track.enabled}`);
           });
           this.activeStream = remoteStream;
           this.onStreamReceivedCallbacks.forEach(cb => cb(remoteStream));
@@ -177,6 +201,7 @@ export class P2PManager {
         });
         
         call.on('close', () => {
+          console.log(`Call closed with ${call.peer}`);
           if (this.streamConnections.get(call.peer) === call) {
             this.streamConnections.delete(call.peer);
           }
@@ -191,7 +216,6 @@ export class P2PManager {
 
       this.peer.on('error', (err) => {
         console.error('Peer error event:', err);
-        // If it's a "disconnected" type error, we might want to ignore if reconnecting
         if (err.type === 'disconnected') return;
         this.onErrorCallbacks.forEach(cb => cb(err));
       });
@@ -395,6 +419,7 @@ export class P2PManager {
     }
 
     console.log('Initiating call to:', remoteId);
+    this.connectionRequestTimes.set(remoteId, Date.now());
     try {
       const call = this.peer.call(remoteId, stream);
       if (call) {

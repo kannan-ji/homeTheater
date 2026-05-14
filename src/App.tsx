@@ -16,6 +16,7 @@ export default function App() {
   const [peerId, setPeerId] = useState<string>('');
   const [targetId, setTargetId] = useState<string>('');
   const [isHost, setIsHost] = useState(false);
+  const [hasAttemptedToJoin, setHasAttemptedToJoin] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [videoFile, setVideoFile] = useState<string | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null); // Keep for compatibility if needed, but not primarily used
@@ -302,6 +303,7 @@ export default function App() {
   };
 
   const handleConnect = () => {
+    setHasAttemptedToJoin(true);
     if (targetId) {
       initP2P(targetId);
       setIsHost(false);
@@ -426,7 +428,24 @@ export default function App() {
       </header>
 
       <main className="max-w-7xl mx-auto p-4 md:p-8 lg:p-12">
-        {!isConnected && !videoFile ? (
+        {hasAttemptedToJoin && !isConnected && !videoFile ? (
+          <div className="max-w-lg mx-auto mt-24 text-center bg-zinc-900/50 border border-white/5 p-12 rounded-3xl">
+            <div className="w-20 h-20 bg-red-500/10 rounded-2xl flex items-center justify-center text-red-500 mx-auto mb-8 animate-pulse">
+              <Film size={40} />
+            </div>
+            <h2 className="text-3xl font-bold mb-4">Oops! We’re in the wrong theater...</h2>
+            <p className="text-zinc-400 mb-8">
+              Are you sure you got the theater ID right in the map? 
+            </p>
+            <button 
+              onClick={() => window.location.reload()}
+              className="w-full py-4 px-6 bg-white text-black hover:bg-zinc-200 rounded-xl font-bold transition-all active:scale-95 flex items-center justify-center gap-2"
+            >
+              <RefreshCcw size={18} />
+              Try Reconnecting
+            </button>
+          </div>
+        ) : !isConnected && !videoFile ? (
           <div className="max-w-4xl mx-auto mt-12 grid md:grid-cols-2 gap-8">
             {/* Host Section */}
             <motion.div 
@@ -671,7 +690,7 @@ export default function App() {
                       {chatMessages.map(msg => (
                         <div key={msg.id} className="group">
                           <div className="flex items-baseline gap-2 mb-1">
-                            <span className="font-bold text-xs text-red-400 flex items-center gap-2">
+                            <span className={`font-bold text-xs flex items-center gap-2 ${msg.sender === 'You' ? 'text-green-500' : 'text-red-400'}`}>
                               {msg.sender}
                               {((msg.sender === 'You' && isHost) || (hostName && msg.sender === hostName)) && (
                                 <span className="text-[8px] bg-red-600/20 text-red-500 border border-red-500/20 px-1 rounded-sm uppercase font-bold">Host</span>
