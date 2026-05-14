@@ -418,16 +418,23 @@ export class P2PManager {
       return;
     }
 
-    console.log('Initiating call to:', remoteId);
-    this.connectionRequestTimes.set(remoteId, Date.now());
     try {
+      console.log('Initiating call to:', remoteId);
       const call = this.peer.call(remoteId, stream);
-      if (call) {
-        call.on('error', (err) => {
-          console.error('Call outgoing error to ' + remoteId + ':', err);
-        });
-        this.streamConnections.set(remoteId, call);
-      }
+      
+      call.on('error', (err: any) => {
+        console.error('Call outgoing error to ' + remoteId + ':', err);
+        // Remove from children if it's truly unreachable
+        if (err.type === 'peer-unavailable') {
+          console.log(`Removing unreachable peer from swarm: ${remoteId}`);
+          this.children.delete(remoteId);
+          this.connections.delete(remoteId);
+          this.streamConnections.delete(remoteId);
+          this.connectionRequestTimes.delete(remoteId);
+        }
+      });
+      
+      this.streamConnections.set(remoteId, call);
     } catch (e) {
       console.error('Call failed:', e);
     }
