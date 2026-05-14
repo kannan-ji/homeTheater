@@ -257,11 +257,18 @@ export default function CinemaPlayer({
             className="absolute inset-0 z-40 bg-black/80 flex flex-col items-center justify-center cursor-pointer"
             onClick={() => {
                if (videoRef.current) {
+                 console.log('CinemaPlayer: Overlay clicked, attempting to unblock.');
                  videoRef.current.muted = false;
                  setIsMuted(false);
-                 videoRef.current.play().catch(e => console.warn('Still blocked:', e));
-                 setIsBlocked(false);
-               } 
+                 videoRef.current.play().then(() => {
+                   console.log('CinemaPlayer: Successfully unblocked and playing.');
+                   setIsBlocked(false);
+                 }).catch(e => {
+                   console.warn('CinemaPlayer: Still blocked after click:', e);
+                 });
+               } else {
+                 console.error('CinemaPlayer: videoRef not found on overlay click');
+               }
             }}
           >
             <div className="w-20 h-20 bg-red-600 rounded-full flex items-center justify-center shadow-[0_0_40px_rgba(220,38,38,0.4)] mb-4">
