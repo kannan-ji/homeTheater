@@ -20,7 +20,6 @@ export default function App() {
   const [isHost, setIsHost] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [videoFile, setVideoFile] = useState<string | null>(null);
-  const [magnetURI, setMagnetURI] = useState<string | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null); // Keep for compatibility if needed, but not primarily used
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
@@ -193,9 +192,6 @@ export default function App() {
       } else if (msg.type === 'info') {
         if (msg.payload.type === 'peer-count' && !isHostRef.current) {
           setPeerCountOverride(msg.payload.count);
-        } else if (msg.payload.type === 'magnet' && !isHostRef.current) {
-          console.log('Received magnet URI:', msg.payload.magnetURI);
-          setMagnetURI(msg.payload.magnetURI);
         }
       } else if (msg.type === 'signal') {
         const payload = msg.payload;
@@ -221,9 +217,6 @@ export default function App() {
             // Re-send handshake to ensure everyone knows the host name
             manager.broadcast('handshake', { displayName: manager.displayName });
             manager.broadcast('info', { type: 'peer-count', count: next.length + 1 });
-            if (magnetURIRef.current) {
-              manager.broadcast('info', { type: 'magnet', magnetURI: magnetURIRef.current });
-            }
           }, 1000);
         }
         return next;
@@ -295,12 +288,6 @@ export default function App() {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
 
-  const magnetURIRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    magnetURIRef.current = magnetURI;
-  }, [magnetURI]);
-
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -309,23 +296,6 @@ export default function App() {
       setVideoFile(url);
       setIsHost(true);
       
-      addSystemMessage('Seeding file via WebTorrent...');
-      const wt = getTorrentClient();
-      wt.seed(file, {
-        announceList: [
-          ["wss://tracker.openwebtorrent.com"],
-          ["wss://tracker.btorrent.xyz"],
-          ["wss://tracker.fastcast.nz"]
-        ]
-      }, (torrent: any) => {
-        console.log('Client is seeding:', torrent.magnetURI);
-        setMagnetURI(torrent.magnetURI);
-        // If we already have peers, broadcast immediately
-        if (p2pRef.current) {
-          p2pRef.current.broadcast('info', { type: 'magnet', magnetURI: torrent.magnetURI });
-        }
-      });
-
       initP2P(); // Create room ID only when file is selected
     }
   };
@@ -367,9 +337,13 @@ export default function App() {
   };
 
   const onStreamCreated = React.useCallback((stream: MediaStream) => {
-    console.log('Main App: Local Stream ready (no longer broadcasted over generic WebRTC to save bandwidth for WebTorrent)');
+    console.log('Main App: Local Stream ready, broadcasting to peers.');
     activeStreamRef.current = stream;
     setStreamStatus('live');
+    if (p2pRef.current && isHostRef.current) {
+      console.log('Setting local stream for swarm broadcast');
+      p2pRef.current.setLocalStream(stream);
+    }
   }, []);
 
   const refreshStream = () => {
@@ -422,7 +396,7 @@ export default function App() {
     <div className="min-h-screen bg-[#09090b] text-zinc-100 selection:bg-red-500/30 selection:text-red-200">
       {/* Autoplay Overlay for Guests */}
       <AnimatePresence>
-        {!isHost && isConnected && streamStatus === 'paused' && (remoteStream || magnetURI) && (
+        {!isHost && isConnected && streamStatus === 'paused' && remoteStream && (
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}

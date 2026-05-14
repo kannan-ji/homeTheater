@@ -1,12 +1,10 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { Play, Pause, Volume2, VolumeX, Maximize, User, Users, Share2, Copy, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { getTorrentClient } from '../lib/torrent';
 
 interface CinemaPlayerProps {
   src?: string;
   stream?: MediaStream;
-  magnetURI?: string;
   onStreamCreated?: (stream: MediaStream) => void;
   onPlaybackBlocked?: () => void;
   onSync?: (state: { currentTime: number; paused: boolean; duration: number }) => void;
@@ -17,7 +15,6 @@ interface CinemaPlayerProps {
 export default function CinemaPlayer({ 
   src, 
   stream, 
-  magnetURI,
   onStreamCreated, 
   onPlaybackBlocked,
   onSync,
@@ -94,63 +91,6 @@ export default function CinemaPlayer({
       }
     }
   }, [src, isHost, onStreamCreated]);
-
-  useEffect(() => {
-    if (!isHost && magnetURI && videoRef.current) {
-      const video = videoRef.current;
-      const wt = getTorrentClient();
-      
-      console.log('Got magnet URI, adding to WebTorrent...', magnetURI);
-      
-      // Explicitly set these via JS for maximum peer compatibility
-      video.playsInline = true;
-      video.autoplay = true;
-
-      const torrent = wt.add(magnetURI, (torrent: any) => {
-        console.log('WebTorrent ready, rendering to video element.');
-        const file = torrent.files.find((f: any) => f.name.endsWith('.mp4') || f.name.endsWith('.webm') || f.name.endsWith('.mkv')) || torrent.files[0];
-        
-        if (file) {
-          file.renderTo(video, { autoplay: true });
-          
-          if (onStreamCreated) {
-            // we fake a stream created since we aren't using MediaStream anymore, just to trigger UI state
-            onStreamCreated(new MediaStream());
-          }
-        }
-      });
-
-      torrent.on('download', (bytes: number) => {
-        console.log(`Downloading: ${(torrent.downloaded / 1024 / 1024).toFixed(2)} MB / ${(torrent.downloadSpeed / 1024 / 1024).toFixed(2)} MB/s`);
-        // We could dispatch an event or expose this to state, but for now console logging helps debug
-      });
-      
-      torrent.on('warning', (err: any) => {
-        console.warn('WebTorrent Warning:', err);
-      });
-
-      torrent.on('error', (err: any) => {
-        console.error('WebTorrent Error downloading:', err);
-      });
-
-      const handleStreamReady = () => {
-        video.play().catch(err => {
-          console.warn('Initial playback failed (normal, blocked by browser):', err.name);
-          setIsBlocked(true);
-          if (!isHost && onPlaybackBlocked) onPlaybackBlocked();
-        });
-      };
-
-      video.addEventListener('loadedmetadata', handleStreamReady);
-      video.addEventListener('canplay', handleStreamReady);
-      
-      return () => {
-        video.removeEventListener('loadedmetadata', handleStreamReady);
-        video.removeEventListener('canplay', handleStreamReady);
-        wt.remove(magnetURI);
-      };
-    }
-  }, [magnetURI, isHost, onPlaybackBlocked]);
 
   // Sync state from host to peer
   useEffect(() => {
@@ -366,7 +306,7 @@ export default function CinemaPlayer({
         )}
       </AnimatePresence>
 
-      {!src && !stream && !magnetURI && (
+      {!src && !stream && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900 text-white/50 text-center px-4">
           <Play size={48} className="mb-4 opacity-20" />
           <p className="text-lg font-medium text-white/80">No Video Source</p>
