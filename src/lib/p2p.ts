@@ -268,6 +268,20 @@ export class P2PManager {
 
       if (msg.type === 'signal') {
         const payload = msg.payload;
+        if (payload?.action === 'ready-to-stream' && this.activeStream) {
+          console.log('Peer requested stream resync:', msg.sender);
+          const existing = this.streamConnections.get(msg.sender);
+          if (existing) {
+            try { existing.close(); } catch (e) {}
+            this.streamConnections.delete(msg.sender);
+          }
+          // Small delay before retry to ensure cleanup
+          setTimeout(() => {
+            if (this.activeStream && this.connections.has(msg.sender)) {
+              this.call(msg.sender, this.activeStream);
+            }
+          }, 800);
+        }
         if (payload?.action === 'ping') {
           conn.send({
             id: Math.random().toString(36).substr(2, 9),

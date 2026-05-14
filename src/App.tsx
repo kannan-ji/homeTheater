@@ -328,6 +328,13 @@ export default function App() {
     window.location.href = window.location.pathname; // Reload without search query
   };
 
+  const refreshGuestStream = () => {
+    if (p2pRef.current && !isHostRef.current) {
+      addSystemMessage('Requesting stream refresh...');
+      p2pRef.current.broadcast('signal', { action: 'ready-to-stream' });
+    }
+  };
+
   const copyInviteLink = () => {
     const url = new URL(window.location.href);
     url.searchParams.set('room', peerId);
@@ -559,7 +566,6 @@ export default function App() {
               <CinemaPlayer 
                 src={videoFile || undefined} 
                 stream={remoteStream || undefined}
-                magnetURI={magnetURI || undefined}
                 onStreamCreated={onStreamCreated}
                 onPlaybackBlocked={() => setStreamStatus('paused')}
                 onSync={onSync}
@@ -632,20 +638,19 @@ export default function App() {
                 </div>
               </div>
 
-              {!isHost && isConnected && !remoteStream && !magnetURI && (
+              {!isHost && isConnected && !remoteStream && (
                 <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4">
                   <div className="flex items-center gap-2 text-red-500 text-sm">
                     <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
                     <span>Stream not received yet. This can happen on some networks.</span>
                   </div>
-                </div>
-              )}
-              {!isHost && isConnected && magnetURI && streamStatus !== 'live' && (
-                <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4">
-                  <div className="flex items-center gap-2 text-yellow-500 text-sm">
-                    <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse" />
-                    <span>Downloading torrent and connecting to peers. This may take a minute...</span>
-                  </div>
+                  <button 
+                    onClick={refreshGuestStream}
+                    className="px-4 py-2 bg-red-600 text-white rounded-lg text-xs font-bold hover:bg-red-500 transition-colors flex items-center gap-2"
+                  >
+                    <RefreshCcw size={14} />
+                    Request Resync
+                  </button>
                 </div>
               )}
             </div>
