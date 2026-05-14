@@ -104,16 +104,7 @@ export class P2PManager {
             { urls: 'stun:stun.services.mozilla.com' },
             { urls: 'stun:stun.sipgate.net:10000' },
             { urls: 'stun:stun.voxgratia.org:3478' },
-            { urls: 'stun:stun.stunprotocol.org:3478' },
-            {
-              urls: [
-                'turn:openrelay.metered.ca:80',
-                'turn:openrelay.metered.ca:443',
-                'turn:openrelay.metered.ca:443?transport=tcp'
-              ],
-              username: 'openrelayproject',
-              credential: 'openrelayproject'
-            }
+            { urls: 'stun:stun.stunprotocol.org:3478' }
           ],
           iceTransportPolicy: 'all',
           iceCandidatePoolSize: 10,
@@ -277,20 +268,6 @@ export class P2PManager {
 
       if (msg.type === 'signal') {
         const payload = msg.payload;
-        if (payload?.action === 'ready-to-stream' && this.activeStream) {
-          console.log('Peer requested stream resync:', msg.sender);
-          const existing = this.streamConnections.get(msg.sender);
-          if (existing) {
-            try { existing.close(); } catch (e) {}
-            this.streamConnections.delete(msg.sender);
-          }
-          // Small delay before retry to ensure cleanup
-          setTimeout(() => {
-            if (this.activeStream && this.connections.has(msg.sender)) {
-              this.call(msg.sender, this.activeStream);
-            }
-          }, 800);
-        }
         if (payload?.action === 'ping') {
           conn.send({
             id: Math.random().toString(36).substr(2, 9),

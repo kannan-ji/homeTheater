@@ -358,13 +358,6 @@ export default function App() {
     window.location.href = window.location.pathname; // Reload without search query
   };
 
-  const refreshGuestStream = () => {
-    if (p2p && !isHost) {
-      addSystemMessage('Requesting stream refresh...');
-      p2p.broadcast('signal', { action: 'ready-to-stream' });
-    }
-  };
-
   const copyInviteLink = () => {
     const url = new URL(window.location.href);
     url.searchParams.set('room', peerId);
@@ -671,13 +664,6 @@ export default function App() {
                     <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
                     <span>Stream not received yet. This can happen on some networks.</span>
                   </div>
-                  <button 
-                    onClick={refreshGuestStream}
-                    className="px-4 py-2 bg-red-600 text-white rounded-lg text-xs font-bold hover:bg-red-500 transition-colors flex items-center gap-2"
-                  >
-                    <RefreshCcw size={14} />
-                    Request Resync
-                  </button>
                 </div>
               )}
               {!isHost && isConnected && magnetURI && streamStatus !== 'live' && (
