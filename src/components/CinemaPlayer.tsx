@@ -67,13 +67,21 @@ export default function CinemaPlayer({
         videoRef.current.play().then(() => {
           console.log('CinemaPlayer: Playback started automatically');
           setIsBlocked(false);
+          setIsPlaying(true);
         }).catch(e => {
           if (e.name !== 'NotAllowedError') {
             console.warn('CinemaPlayer: Playback failed:', e);
+            // Attempt a more aggressive retry if playback fails for other reasons
+            setTimeout(() => {
+              if (videoRef.current) {
+                videoRef.current.play().catch(e => console.warn('CinemaPlayer: Retry playback failed', e));
+              }
+            }, 1000);
           } else {
             console.log('CinemaPlayer: Autoplay blocked, showing overlay');
           }
           setIsBlocked(true);
+          setIsPlaying(false);
           if (onPlaybackBlocked) onPlaybackBlocked();
         });
       }
