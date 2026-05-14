@@ -52,7 +52,11 @@ export default function CinemaPlayer({
       if (videoRef.current.srcObject !== stream) {
         videoRef.current.srcObject = stream;
         videoRef.current.play().catch(e => {
-          console.warn('Playback blocked:', e);
+          // It's expected for browsers to block autoplay before user interaction.
+          // We handle this by setting isBlocked = true and showing an overlay.
+          if (e.name !== 'NotAllowedError') {
+            console.warn('Playback error:', e);
+          }
           setIsBlocked(true);
           if (onPlaybackBlocked) onPlaybackBlocked();
         });
@@ -114,7 +118,11 @@ export default function CinemaPlayer({
             if (syncState.paused) {
               video.pause();
             } else {
-              video.play().catch(() => {
+              video.play().catch((e) => {
+                if (e.name !== 'NotAllowedError') {
+                  console.warn('Sync play error:', e);
+                }
+                setIsBlocked(true);
                 if (onPlaybackBlocked) onPlaybackBlocked();
               });
             }

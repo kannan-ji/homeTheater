@@ -388,44 +388,8 @@ export default function App() {
     }
   };
 
-  const handleGuestPlay = React.useCallback(() => {
-    const video = document.querySelector('video');
-    if (video) {
-      video.muted = false;
-      video.play().catch(err => console.error('Manual play failed:', err));
-      setStreamStatus('live');
-    }
-  }, []);
-
   return (
     <div className="min-h-screen bg-[#09090b] text-zinc-100 selection:bg-red-500/30 selection:text-red-200">
-      {/* Autoplay Overlay for Guests */}
-      <AnimatePresence>
-        {!isHost && isConnected && streamStatus === 'paused' && remoteStream && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-6"
-          >
-            <div className="bg-zinc-900 border border-white/10 p-8 rounded-3xl max-w-sm w-full text-center shadow-2xl">
-              <div className="w-16 h-16 bg-red-600 rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse">
-                <Play size={32} fill="currentColor" />
-              </div>
-              <h2 className="text-2xl font-bold mb-4">Stream Ready</h2>
-              <p className="text-zinc-400 mb-8 text-sm">
-                The cinema stream has started. Click the button below to join the theater.
-              </p>
-              <button 
-                onClick={handleGuestPlay}
-                className="w-full py-4 bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold transition-all shadow-xl shadow-red-600/20 active:scale-95"
-              >
-                Join Theater
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
       <header className="border-b border-white/5 bg-black/40 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -439,7 +403,7 @@ export default function App() {
             {p2p && (
               <div className="text-zinc-500 text-[10px] sm:text-sm font-medium flex flex-col items-end sm:flex-row sm:items-center sm:gap-2 text-right">
                 <div className="flex items-center gap-1.5">
-                  <span className="opacity-70">{isHost ? 'Seeding' : 'Connected'} as</span>
+                  <span className="opacity-70">{isHost ? 'Streaming' : 'Connected'} as</span>
                   <span className="text-red-400 font-bold">{p2p.displayName}</span>
                 </div>
                 {isHost && videoFile && (
@@ -470,9 +434,9 @@ export default function App() {
               <div className="w-16 h-16 bg-red-500/10 rounded-2xl flex items-center justify-center text-red-500 mb-6 group-hover:scale-110 transition-transform">
                 <Monitor size={32} />
               </div>
-              <h2 className="text-2xl font-bold mb-2">Seed a Session</h2>
+              <h2 className="text-2xl font-bold mb-2">Host a Session</h2>
               <p className="text-zinc-400 mb-8 max-w-[280px]">
-                Stream a local video file from your system. Your friends can join via your Swarm ID.
+                Stream a local video file from your system. Your friends can join via your Theater ID.
               </p>
               
               <label className="w-full">
@@ -498,9 +462,9 @@ export default function App() {
               <div className="w-16 h-16 bg-white/5 rounded-2xl flex items-center justify-center text-white mb-6 group-hover:scale-110 transition-transform">
                 <Link2 size={32} />
               </div>
-              <h2 className="text-2xl font-bold mb-2">Join a Swarm</h2>
+              <h2 className="text-2xl font-bold mb-2">Join a Theater</h2>
               <p className="text-zinc-400 mb-8 max-w-[280px]">
-                Already have a Swarm ID? Paste it below to join your friend's cinema swarm.
+                Already have a Theater ID? Paste it below to join your friend's cinema room.
               </p>
               
               <div className="w-full space-y-4">
@@ -553,7 +517,7 @@ export default function App() {
                       <div className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full animate-spin" />
                       Connecting...
                     </>
-                  ) : 'Enter Swarm'}
+                  ) : 'Enter Theater'}
                 </button>
               </div>
             </motion.div>
@@ -565,7 +529,6 @@ export default function App() {
                 src={videoFile || undefined} 
                 stream={remoteStream || undefined}
                 onStreamCreated={onStreamCreated}
-                onPlaybackBlocked={() => setStreamStatus('paused')}
                 onSync={onSync}
                 syncState={syncState}
                 isHost={isHost}
@@ -575,7 +538,7 @@ export default function App() {
                 <div className="w-full sm:w-auto">
                   <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
                     <h3 className="text-lg font-bold">
-                      {isHost ? 'Seeding Local File' : 'Connected to Swarm'}
+                      {isHost ? 'Streaming Local File' : 'Connected to Theater'}
                     </h3>
                     {isHost && (
                       <div className="flex items-center gap-2">
@@ -592,7 +555,7 @@ export default function App() {
                     )}
                   </div>
                   <div className="text-zinc-500 text-sm flex flex-col sm:flex-row sm:items-center gap-2 mt-2 sm:mt-1">
-                    {!isHost && <span>{`Connected to ${hostName || 'Seeder'}'s live stream.`}</span>}
+                    {!isHost && <span>{`Connected to ${hostName || 'Host'}'s live stream.`}</span>}
                     {isConnected && (
                       <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-white/5 rounded-full text-xs font-medium text-zinc-400 w-fit">
                         <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
@@ -613,7 +576,7 @@ export default function App() {
                       onClick={leaveParty}
                       className="px-4 py-2 bg-red-600/10 hover:bg-red-600/20 text-red-500 rounded-xl border border-red-500/20 transition-all text-sm font-medium"
                     >
-                      Leave Swarm
+                      Leave Theater
                     </button>
                   ) : (
                     <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
@@ -622,7 +585,7 @@ export default function App() {
                         className="flex items-center justify-center gap-2 px-4 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl transition-all shadow-lg shadow-red-600/20 text-sm font-bold w-full sm:w-auto bg-nowrap min-w-[180px]"
                       >
                         {copied ? <Check size={18} /> : <Share2 size={18} />}
-                        {copied ? 'Copied Invite Link!' : 'Share Swarm Link'}
+                        {copied ? 'Copied Invite Link!' : 'Share Theater Link'}
                       </button>
                       <button 
                         onClick={refreshStream}
@@ -757,18 +720,18 @@ export default function App() {
           </div>
         )}
         
-        {/* Swarm Dashboard (Debugging & Status) */}
+        {/* Network Dashboard (Debugging & Status) */}
         {isConnected && swarmStats && (
           <div className="mt-8 border-t border-white/5 pt-8">
             <div className="flex items-center gap-2 mb-4 text-zinc-500">
               <Users size={16} />
-              <h4 className="text-xs font-bold uppercase tracking-widest">Swarm Health Dashboard</h4>
+              <h4 className="text-xs font-bold uppercase tracking-widest">Network Health Dashboard</h4>
             </div>
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
               <div className="bg-zinc-900/40 border border-white/5 p-4 rounded-2xl">
                 <p className="text-[10px] text-zinc-500 uppercase font-bold mb-1">Network Topology</p>
                 <div className="text-sm font-medium">
-                  {swarmStats.parents > 0 ? 'Relay Node' : 'Root Seeder'}
+                  {swarmStats.parents > 0 ? 'Relay Node' : 'Source Host'}
                   <span className="text-zinc-600 block text-[10px] font-mono mt-0.5">{swarmStats.peerId?.slice(0, 8)}...</span>
                 </div>
               </div>

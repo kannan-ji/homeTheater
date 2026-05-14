@@ -22,7 +22,6 @@ export default defineConfig(({mode}) => {
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
-        'webtorrent': 'webtorrent/dist/webtorrent.min.js',
       },
     },
     server: {
