@@ -46,6 +46,7 @@ This repository includes a GitHub Action to deploy the app automatically.
 
 ### Core Stack
 - **React 19**: Utilizing the latest concurrent features for a smooth UI.
+- **Express**: Server-side API and infrastructure management.
 - **Tailwind CSS 4**: Modern utility-first styling with high performance.
 - **Vite 6**: Extremely fast development and build pipeline.
 - **Motion**: Fluid animations for route transitions and interactive UI elements.

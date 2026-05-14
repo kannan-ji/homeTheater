@@ -144,13 +144,12 @@ export class P2PManager {
         if (!call) return;
         
         // Safety check: if I already have an active call producing a stream from this peer, 
-        // maybe ignore the new call unless it's a different stream?
+        // close it to accept the new incoming call (e.g. for reconnection/re-sync).
         const existingCall = this.streamConnections.get(call.peer);
-        if (existingCall && existingCall.open) {
-           console.log('Ignore incoming call from ' + call.peer + ' - already have one open');
-           // In some cases we might want to replace it, but let's try being conservative first
-           // to avoid the "interrupted by pause" error in the browser.
-           return; 
+        if (existingCall) {
+           console.log('Closing existing call from ' + call.peer + ' to accept new one.');
+           try { existingCall.close(); } catch (e) {}
+           this.streamConnections.delete(call.peer);
         }
 
         console.log('Incoming call from:', call.peer);
