@@ -75,19 +75,16 @@ export class P2PManager {
   private startHeartbeat() {
     this.heartbeatInterval = setInterval(() => {
       if (this.peer && !this.peer.destroyed) {
-        // Forced Re-initialization Check
+        // cleanup stalled connection attempts
         const now = Date.now();
-        let stalled = false;
         this.connectionRequestTimes.forEach((startTime, peerId) => {
-          if (now - startTime > 5000 && !this.streamConnections.has(peerId)) {
-            console.error(`Connection stalled for peer ${peerId} ( > 5s ). Forcing Peer node re-init.`);
-            stalled = true;
+          if (now - startTime > 10000 && !this.streamConnections.has(peerId)) {
+            console.warn(`Connection stalled for peer ${peerId} ( > 10s ). Removing stalled peer.`);
+            this.connections.delete(peerId);
+            this.children.delete(peerId);
+            this.connectionRequestTimes.delete(peerId);
           }
         });
-        if (stalled) {
-          this.reInitializePeer();
-          return;
-        }
 
         if (this.connections.size > 0) {
           this.broadcast('signal', { action: 'heartbeat', timestamp: now });
@@ -105,12 +102,7 @@ export class P2PManager {
     }, 10000); 
   }
 
-  private reInitializePeer() {
-    console.log('Forced re-initialization of PeerJS node.');
-    this.destroy(); // Destroy old
-    this.init(); // Init new
-  }
-
+  // Not used as forced re-init of the whole node is destructive
   private hardCloseCall(call: MediaConnection) {
     console.log(`Aggressive closing of call to: ${call.peer}`);
     try {
@@ -159,6 +151,7 @@ export class P2PManager {
         
         this.reconnectTimeout = setTimeout(() => {
           if (this.peer && !this.peer.destroyed && this.peer.disconnected) {
+            console.log('Reconnecting to signaling server...');
             try {
               this.peer.reconnect();
             } catch (e) {
@@ -362,7 +355,7 @@ export class P2PManager {
   public setLocalStream(stream: MediaStream) {
     console.log('Setting local stream! Closing old outgoing stream connections to force negotiation.');
     this.streamConnections.forEach((call, peerId) => {
-      try { call.close(); } catch (e) {}
+      this.hardCloseCall(call);
     });
     this.streamConnections.clear();
     
