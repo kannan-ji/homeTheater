@@ -25,7 +25,7 @@ export default function CinemaPlayer({
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [volume, setVolume] = useState(1);
-  const [isMuted, setIsMuted] = useState(false);
+  const [isMuted, setIsMuted] = useState(!isHost);
   const [showControls, setShowControls] = useState(true);
   const [isBlocked, setIsBlocked] = useState(false);
 
@@ -53,6 +53,7 @@ export default function CinemaPlayer({
       if (videoRef.current.srcObject !== stream) {
         console.log('CinemaPlayer: Applying new stream to video element', stream.id);
         videoRef.current.srcObject = stream;
+        videoRef.current.muted = !isHost;
         
         // Ensure tracks are enabled
         stream.getTracks().forEach(track => {
