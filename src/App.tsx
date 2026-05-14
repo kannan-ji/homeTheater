@@ -275,12 +275,11 @@ export default function App() {
     // Check URL for join ID
     const urlParams = new URLSearchParams(window.location.search);
     const theaterFromUrl = urlParams.get('theater') || urlParams.get('room');
-    const savedTheaterId = theaterFromUrl || localStorage.getItem('lastTheaterId');
-    if (savedTheaterId) setTargetId(savedTheaterId);
+    if (theaterFromUrl) setTargetId(theaterFromUrl);
 
-    // If we have a theater URL, initialize and join immediately
+    // If we have a theater URL, join immediately
     if (theaterFromUrl) {
-      initP2P(theaterFromUrl);
+      joinTheater(theaterFromUrl);
     }
 
     return () => p2pRef.current?.destroy();
@@ -302,14 +301,17 @@ export default function App() {
     }
   };
 
-  const handleConnect = () => {
+  const joinTheater = (theaterId: string) => {
     setHasAttemptedToJoin(true);
-    if (targetId) {
-      initP2P(targetId);
+    if (theaterId) {
+      initP2P(theaterId);
       setIsHost(false);
       setIsConnected(true);
-      localStorage.setItem('lastTheaterId', targetId);
     }
+  };
+
+  const handleConnect = () => {
+    joinTheater(targetId);
   };
 
   const handleSendMessage = () => {
@@ -327,7 +329,6 @@ export default function App() {
   };
 
   const leaveParty = () => {
-    localStorage.removeItem('lastTheaterId');
     window.location.href = window.location.pathname; // Reload without search query
   };
 
