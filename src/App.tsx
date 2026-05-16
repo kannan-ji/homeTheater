@@ -412,16 +412,6 @@ export default function App() {
                   <span className="opacity-70">{isHost ? 'Streaming' : 'Connected'} as</span>
                   <span className="text-red-400 font-bold">{p2p.displayName}</span>
                 </div>
-                {isHost && videoFile && (
-                  <button 
-                    onClick={refreshStream}
-                    className="p-1 hover:bg-white/10 rounded-md transition-colors text-zinc-400 hover:text-white flex items-center gap-1"
-                    title="Refresh stream for all peers"
-                  >
-                    <RefreshCcw size={12} />
-                    <span className="text-[9px] uppercase tracking-wider font-bold">Refresh Stream</span>
-                  </button>
-                )}
               </div>
             )}
           </div>
@@ -624,7 +614,7 @@ export default function App() {
                         className="flex items-center justify-center gap-2 px-4 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white rounded-xl border border-white/5 transition-all text-sm font-medium w-full sm:w-auto min-w-[150px]"
                       >
                         <RefreshCcw size={16} className="text-zinc-400" />
-                        Reset Stream
+                        Refresh Stream
                       </button>
                     </div>
                   )}
@@ -649,7 +639,7 @@ export default function App() {
             </div>
 
             {/* Chat Section */}
-            <div className="relative">
+            <div className="relative h-full">
               <AnimatePresence>
                 {(isChatVisible || !isMobile) && (
                   <motion.div 
@@ -658,7 +648,7 @@ export default function App() {
                     exit={{ opacity: 0, y: 20, scale: 0.95 }}
                     className={`
                       flex flex-col bg-zinc-950 lg:bg-zinc-900/50 border border-white/10 lg:border-white/5 rounded-3xl overflow-hidden
-                      ${isChatVisible ? 'fixed inset-4 z-[60] h-auto lg:relative lg:inset-auto lg:h-[600px] lg:z-0' : 'hidden lg:flex h-[600px] sticky top-24'}
+                      ${isChatVisible ? 'fixed inset-4 z-[60] h-auto lg:relative lg:inset-auto lg:h-full lg:z-0' : 'hidden lg:flex h-full sticky top-24'}
                     `}
                   >
                     <div className="p-4 border-b border-white/5 bg-black/20 flex items-center justify-between">
